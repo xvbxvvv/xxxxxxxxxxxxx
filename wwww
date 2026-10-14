@@ -2075,8 +2075,10 @@ do
         end;
 
         ToggleRegion.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 and not Library:MouseIsOverOpenedFrame() then
-                Toggle:SetValue(not Toggle.Value) -- Why was it not like this from the start?
+            local IsClick = Input.UserInputType == Enum.UserInputType.MouseButton1
+                or Input.UserInputType == Enum.UserInputType.Touch;
+            if IsClick and not Library:MouseIsOverOpenedFrame() then
+                Toggle:SetValue(not Toggle.Value);
                 Library:AttemptSave();
             end;
         end);
@@ -2284,38 +2286,87 @@ do
         end;
 
         local function OnSliderDown(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 and not Library:MouseIsOverOpenedFrame() then
-                local mPos = Mouse.X;
+            local IsTouch = Input.UserInputType == Enum.UserInputType.Touch;
+            local IsMouse = Input.UserInputType == Enum.UserInputType.MouseButton1;
+            if (IsMouse or IsTouch) and not Library:MouseIsOverOpenedFrame() then
+                -- Pour le tactile on utilise Input.Position ; pour la souris on utilise Mouse.X
+                local function GetCurrentX()
+                    if IsTouch then
+                        return Input.Position.X;
+                    else
+                        return Mouse.X;
+                    end
+                end
+
+                local mPos = GetCurrentX();
                 local gPos = Fill.Size.X.Offset;
                 local Diff = mPos - (Fill.AbsolutePosition.X + gPos);
 
-                while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                    local nMPos = Mouse.X;
-                    local nX = math.clamp(gPos + (nMPos - mPos) + Diff, 0, Slider.MaxSize);
+                -- Pour le tactile on suit InputChanged sur cet objet Input précis
+                if IsTouch then
+                    local TouchPos = mPos;
+                    local Connection;
+                    Connection = InputService.InputChanged:Connect(function(ChangedInput)
+                        if ChangedInput ~= Input then return end;
+                        TouchPos = ChangedInput.Position.X;
+                    end);
 
-                    local nValue = Slider:GetValueFromXOffset(nX);
-                    local OldValue = Slider.Value;
-                    Slider.Value = nValue;
+                    repeat
+                        local nX = math.clamp(gPos + (TouchPos - mPos) + Diff, 0, Slider.MaxSize);
+                        local nValue = Slider:GetValueFromXOffset(nX);
+                        local OldValue = Slider.Value;
+                        Slider.Value = nValue;
 
-                    -- direct set while dragging (tween would lag behind the cursor)
-                    local dX = math.ceil(Library:MapValue(Slider.Value, Slider.Min, Slider.Max, 0, Slider.MaxSize));
-                    Fill.Size = UDim2.new(0, dX, 1, 0);
-                    HideBorderRight.Visible = not (dX == Slider.MaxSize or dX == 0);
+                        local dX = math.ceil(Library:MapValue(Slider.Value, Slider.Min, Slider.Max, 0, Slider.MaxSize));
+                        Fill.Size = UDim2.new(0, dX, 1, 0);
+                        HideBorderRight.Visible = not (dX == Slider.MaxSize or dX == 0);
 
-                    if Info.Compact then
-                        DisplayLabel.Text = Info.Text .. ': ' .. Slider.Value .. (Info.Suffix or '');
-                    elseif Info.HideMax then
-                        DisplayLabel.Text = string.format('%s', Slider.Value .. (Info.Suffix or ''));
-                    else
-                        DisplayLabel.Text = string.format('%s/%s', Slider.Value .. (Info.Suffix or ''), Slider.Max .. (Info.Suffix or ''));
+                        if Info.Compact then
+                            DisplayLabel.Text = Info.Text .. ': ' .. Slider.Value .. (Info.Suffix or '');
+                        elseif Info.HideMax then
+                            DisplayLabel.Text = string.format('%s', Slider.Value .. (Info.Suffix or ''));
+                        else
+                            DisplayLabel.Text = string.format('%s/%s', Slider.Value .. (Info.Suffix or ''), Slider.Max .. (Info.Suffix or ''));
+                        end;
+
+                        if nValue ~= OldValue then
+                            Library:SafeCallback(Slider.Callback, Slider.Value);
+                            Library:SafeCallback(Slider.Changed, Slider.Value);
+                        end;
+
+                        RenderStepped:Wait();
+                    until Input.UserInputState == Enum.UserInputState.End;
+
+                    Connection:Disconnect();
+                else
+                    while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                        local nMPos = Mouse.X;
+                        local nX = math.clamp(gPos + (nMPos - mPos) + Diff, 0, Slider.MaxSize);
+
+                        local nValue = Slider:GetValueFromXOffset(nX);
+                        local OldValue = Slider.Value;
+                        Slider.Value = nValue;
+
+                        -- direct set while dragging (tween would lag behind the cursor)
+                        local dX = math.ceil(Library:MapValue(Slider.Value, Slider.Min, Slider.Max, 0, Slider.MaxSize));
+                        Fill.Size = UDim2.new(0, dX, 1, 0);
+                        HideBorderRight.Visible = not (dX == Slider.MaxSize or dX == 0);
+
+                        if Info.Compact then
+                            DisplayLabel.Text = Info.Text .. ': ' .. Slider.Value .. (Info.Suffix or '');
+                        elseif Info.HideMax then
+                            DisplayLabel.Text = string.format('%s', Slider.Value .. (Info.Suffix or ''));
+                        else
+                            DisplayLabel.Text = string.format('%s/%s', Slider.Value .. (Info.Suffix or ''), Slider.Max .. (Info.Suffix or ''));
+                        end;
+
+                        if nValue ~= OldValue then
+                            Library:SafeCallback(Slider.Callback, Slider.Value);
+                            Library:SafeCallback(Slider.Changed, Slider.Value);
+                        end;
+
+                        RenderStepped:Wait();
                     end;
-
-                    if nValue ~= OldValue then
-                        Library:SafeCallback(Slider.Callback, Slider.Value);
-                        Library:SafeCallback(Slider.Changed, Slider.Value);
-                    end;
-
-                    RenderStepped:Wait();
                 end;
 
                 Library:AttemptSave();
@@ -2328,7 +2379,7 @@ do
                 BackgroundTransparency = 1;
                 AnchorPoint = Vector2.new(0, 0.5);
                 Position = UDim2.new(0, 0, 0.5, 0);
-                Size = UDim2.new(1, 0, 0, 26);
+                Size = UDim2.new(1, 0, 0, 36);
                 ZIndex = 8;
                 Active = true;
                 Parent = SliderOuter;
@@ -3518,7 +3569,7 @@ function Library:CreateWindow(...)
     if type(Config.MenuFadeTime) ~= 'number' then Config.MenuFadeTime = 0.2 end
 
     if typeof(Config.Position) ~= 'UDim2' then Config.Position = UDim2.fromOffset(175, 50) end
-    if typeof(Config.Size) ~= 'UDim2' then Config.Size = UDim2.fromOffset(640, 560) end
+    if typeof(Config.Size) ~= 'UDim2' then Config.Size = UDim2.fromOffset(720, 560) end
 
     if Config.Center then
         Config.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -3531,7 +3582,7 @@ function Library:CreateWindow(...)
     local AutoSize = (Config.AutoSize ~= false);
     local ViewportMargin = (type(Config.Margin) == 'number') and Config.Margin or 16;
     local MinScale = (type(Config.MinScale) == 'number') and Config.MinScale or 0.62;
-    local MaxScale = (type(Config.MaxScale) == 'number') and Config.MaxScale or 1.5;
+    local MaxScale = (type(Config.MaxScale) == 'number') and Config.MaxScale or 1;
     local MaxSizeCfg = typeof(Config.MaxSize) == 'UDim2' and Config.MaxSize or nil;
 
     local function GetViewport()
@@ -3708,7 +3759,6 @@ function Library:CreateWindow(...)
         ZIndex = 2;
         Parent = MainContent;
     });
-
     Library:AddToRegistry(TabContainer, {
         BorderColor3 = 'OutlineColor';
     });
@@ -4156,45 +4206,6 @@ function Library:CreateWindow(...)
         if Toggled then
             -- A bit scuffed, but if we're going from not toggled -> toggled we want to show the frame immediately so that the fade is visible.
             Outer.Visible = true;
-
-            task.spawn(function()
-                -- TODO: add cursor fade?
-                local State = InputService.MouseIconEnabled;
-
-                local Cursor = Drawing.new('Triangle');
-                Cursor.Thickness = 1;
-                Cursor.Filled = true;
-                Cursor.Visible = true;
-
-                local CursorOutline = Drawing.new('Triangle');
-                CursorOutline.Thickness = 1;
-                CursorOutline.Filled = false;
-                CursorOutline.Color = Color3.new(0, 0, 0);
-                CursorOutline.Visible = true;
-
-                while Toggled and ScreenGui.Parent do
-                    InputService.MouseIconEnabled = false;
-
-                    local mPos = InputService:GetMouseLocation();
-
-                    Cursor.Color = Library.AccentColor;
-
-                    Cursor.PointA = Vector2.new(mPos.X, mPos.Y);
-                    Cursor.PointB = Vector2.new(mPos.X + 16, mPos.Y + 6);
-                    Cursor.PointC = Vector2.new(mPos.X + 6, mPos.Y + 16);
-
-                    CursorOutline.PointA = Cursor.PointA;
-                    CursorOutline.PointB = Cursor.PointB;
-                    CursorOutline.PointC = Cursor.PointC;
-
-                    RenderStepped:Wait();
-                end;
-
-                InputService.MouseIconEnabled = State;
-
-                Cursor:Remove();
-                CursorOutline:Remove();
-            end);
         end;
 
         for _, Desc in next, Outer:GetDescendants() do
