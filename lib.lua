@@ -104,11 +104,11 @@ local Library = {
     HudRegistry = {};
 
     FontColor = Color3.fromRGB(255, 255, 255);
-    MainColor = Color3.fromRGB(24, 24, 24);
-    BackgroundColor = Color3.fromRGB(18, 18, 18);
-    AccentColor = Color3.fromRGB(87, 128, 178);
-    AccentColorDark = Color3.fromRGB(56, 85, 120);
-    OutlineColor = Color3.fromRGB(46, 46, 46);
+    MainColor = Color3.fromRGB(26, 22, 43);
+    BackgroundColor = Color3.fromRGB(18, 14, 32);
+    AccentColor = Color3.fromRGB(224, 36, 170);
+    AccentColorDark = Color3.fromRGB(160, 25, 122);
+    OutlineColor = Color3.fromRGB(56, 47, 88);
     RiskColor = Color3.fromRGB(255, 50, 50);
 
     Black = Color3.new(0, 0, 0);
@@ -1603,13 +1603,23 @@ do
                 ZIndex = 5;
             });
 
+            Library:Create('UICorner', {
+                CornerRadius = UDim.new(0, 3);
+                Parent = Outer;
+            });
+
             local Inner = Library:Create('Frame', {
-                BackgroundColor3 = Color3.fromRGB(32, 32, 32);
-                BorderColor3 = Color3.fromRGB(48, 48, 48);
+                BackgroundColor3 = Library.MainColor;
+                BorderColor3 = Library.OutlineColor;
                 BorderMode = Enum.BorderMode.Inset;
                 Size = UDim2.new(1, 0, 1, 0);
                 ZIndex = 6;
                 Parent = Outer;
+            });
+
+            Library:Create('UICorner', {
+                CornerRadius = UDim.new(0, 3);
+                Parent = Inner;
             });
 
             local Label = Library:CreateLabel({
@@ -1622,8 +1632,8 @@ do
 
             Library:Create('UIGradient', {
                 Color = ColorSequence.new({
-                    ColorSequenceKeypoint.new(0, Color3.fromRGB(38, 38, 38)),
-                    ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 24, 24))
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 180, 180))
                 });
                 Rotation = 90;
                 Parent = Inner;
@@ -1637,6 +1647,15 @@ do
                 BackgroundColor3 = 'MainColor';
                 BorderColor3 = 'OutlineColor';
             });
+
+            Library:AddToRegistry(Label, {
+                TextColor3 = 'FontColor';
+            });
+
+            Library:OnHighlight(Outer, Inner,
+                { BorderColor3 = 'AccentColor' },
+                { BorderColor3 = 'OutlineColor' }
+            );
 
             Library:OnHighlight(Outer, Outer,
                 { BorderColor3 = 'AccentColor' },
@@ -1669,7 +1688,7 @@ do
                     return false
                 end
 
-                if Input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+                if Input.UserInputType ~= Enum.UserInputType.MouseButton1 and Input.UserInputType ~= Enum.UserInputType.Touch then
                     return false
                 end
 
@@ -1704,6 +1723,12 @@ do
                     return
                 end
 
+                task.spawn(function()
+                    Button.Label.TextColor3 = Library.AccentColor
+                    task.wait(0.12)
+                    Button.Label.TextColor3 = Library.FontColor
+                end)
+
                 Library:SafeCallback(Button.Func);
             end)
         end
@@ -1726,7 +1751,7 @@ do
 
             ProcessButtonParams('SubButton', SubButton, ...)
 
-            self.Outer.Size = UDim2.new(0.5, -2, 0, 22)
+            self.Outer.Size = UDim2.new(0.5, -2, 0, IsMobile and 28 or 22)
 
             SubButton.Outer, SubButton.Inner, SubButton.Label = CreateBaseButton(SubButton)
 
