@@ -367,23 +367,27 @@ function Library:OnHighlight(HighlightInstance, Instance, Properties, Properties
     end)
 end;
 
-function Library:MouseIsOverOpenedFrame()
+function Library:MouseIsOverOpenedFrame(PX, PY)
+    local X = PX or Mouse.X;
+    local Y = PY or Mouse.Y;
     for Frame, _ in next, Library.OpenedFrames do
         local AbsPos, AbsSize = Frame.AbsolutePosition, Frame.AbsoluteSize;
 
-        if Mouse.X >= AbsPos.X and Mouse.X <= AbsPos.X + AbsSize.X
-            and Mouse.Y >= AbsPos.Y and Mouse.Y <= AbsPos.Y + AbsSize.Y then
+        if X >= AbsPos.X and X <= AbsPos.X + AbsSize.X
+            and Y >= AbsPos.Y and Y <= AbsPos.Y + AbsSize.Y then
 
             return true;
         end;
     end;
 end;
 
-function Library:IsMouseOverFrame(Frame)
+function Library:IsMouseOverFrame(Frame, PX, PY)
+    local X = PX or Mouse.X;
+    local Y = PY or Mouse.Y;
     local AbsPos, AbsSize = Frame.AbsolutePosition, Frame.AbsoluteSize;
 
-    if Mouse.X >= AbsPos.X and Mouse.X <= AbsPos.X + AbsSize.X
-        and Mouse.Y >= AbsPos.Y and Mouse.Y <= AbsPos.Y + AbsSize.Y then
+    if X >= AbsPos.X and X <= AbsPos.X + AbsSize.X
+        and Y >= AbsPos.Y and Y <= AbsPos.Y + AbsSize.Y then
 
         return true;
     end;
@@ -1982,8 +1986,9 @@ do
             BackgroundTransparency = 1;
             AnchorPoint = Vector2.new(0, 0.5);
             Position = UDim2.new(0, 0, 0.5, 0);
-            Size = UDim2.new(0, 170, 0, TouchPad(14));
+            Size = UDim2.new(0, 170, 0, TouchPad(26));
             ZIndex = 8;
+            Active = true;
             Parent = ToggleOuter;
         });
 
@@ -2075,9 +2080,12 @@ do
         end;
 
         ToggleRegion.InputBegan:Connect(function(Input)
-            local IsClick = Input.UserInputType == Enum.UserInputType.MouseButton1
-                or Input.UserInputType == Enum.UserInputType.Touch;
-            if IsClick and not Library:MouseIsOverOpenedFrame() then
+            local IsTouch = Input.UserInputType == Enum.UserInputType.Touch;
+            local IsMouse = Input.UserInputType == Enum.UserInputType.MouseButton1;
+            if not (IsMouse or IsTouch) then return end;
+            local PX = IsTouch and Input.Position.X or Mouse.X;
+            local PY = IsTouch and Input.Position.Y or Mouse.Y;
+            if not Library:MouseIsOverOpenedFrame(PX, PY) then
                 Toggle:SetValue(not Toggle.Value);
                 Library:AttemptSave();
             end;
@@ -2156,6 +2164,7 @@ do
             BorderMode = Enum.BorderMode.Inset;
             Size = UDim2.new(1, 0, 1, 0);
             ZIndex = 6;
+            Active = true;
             Parent = SliderOuter;
         });
 
@@ -2288,7 +2297,10 @@ do
         local function OnSliderDown(Input)
             local IsTouch = Input.UserInputType == Enum.UserInputType.Touch;
             local IsMouse = Input.UserInputType == Enum.UserInputType.MouseButton1;
-            if (IsMouse or IsTouch) and not Library:MouseIsOverOpenedFrame() then
+            if not (IsMouse or IsTouch) then return end;
+            local iPX = IsTouch and Input.Position.X or Mouse.X;
+            local iPY = IsTouch and Input.Position.Y or Mouse.Y;
+            if not Library:MouseIsOverOpenedFrame(iPX, iPY) then
                 -- Pour le tactile on utilise Input.Position ; pour la souris on utilise Mouse.X
                 local function GetCurrentX()
                     if IsTouch then
