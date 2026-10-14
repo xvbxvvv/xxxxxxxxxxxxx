@@ -137,10 +137,10 @@ local Library = {
         Players = 'rbxassetid://15016878198',
         Profile = 'rbxassetid://15016878198',
         Default = 'rbxassetid://7059346373',
-        crosshair = 'rbxassetid://18484264435',
-        Aimbot = 'rbxassetid://18484264435',
-        eye = 'rbxassetid://5881046614',
-        ESP = 'rbxassetid://5881046614',
+        crosshair = 'rbxassetid://83752373575368',
+        Aimbot = 'rbxassetid://83752373575368',
+        eye = 'rbxassetid://83752373575368',
+        ESP = 'rbxassetid://83752373575368',
         circle = 'rbxassetid://5881046614',
         FOV = 'rbxassetid://5881046614',
         maximize = 'rbxassetid://5881046614',
@@ -4156,7 +4156,11 @@ function Library:CreateWindow(...)
         };
 
         local ResolvedIcon = Icon;
-        if not ResolvedIcon then
+        if type(ResolvedIcon) == 'number' then
+            ResolvedIcon = 'rbxassetid://' .. tostring(ResolvedIcon);
+        elseif type(ResolvedIcon) == 'string' and ResolvedIcon:match('^%d+$') then
+            ResolvedIcon = 'rbxassetid://' .. ResolvedIcon;
+        elseif not ResolvedIcon then
             ResolvedIcon = Library.Icons[Name] or Library.Icons.Default;
         elseif Library.Icons[ResolvedIcon] then
             ResolvedIcon = Library.Icons[ResolvedIcon];
