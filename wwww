@@ -9,6 +9,21 @@ local RenderStepped = RunService.RenderStepped;
 local LocalPlayer = Players.LocalPlayer;
 local Mouse = LocalPlayer:GetMouse();
 
+-- Helpers de type d'input (pattern Library 5)
+local function IsMouseInput(Input)
+    return Input.UserInputType == Enum.UserInputType.MouseButton1
+        or Input.UserInputType == Enum.UserInputType.Touch;
+end;
+local function IsClickInput(Input)
+    return IsMouseInput(Input)
+        and Input.UserInputState == Enum.UserInputState.Begin;
+end;
+local function IsDragInput(Input)
+    return IsMouseInput(Input)
+        and (Input.UserInputState == Enum.UserInputState.Begin
+            or Input.UserInputState == Enum.UserInputState.Change);
+end;
+
 local ProtectGui = protectgui or (syn and syn.protect_gui) or (function() end);
 
 local ScreenGui = Instance.new('ScreenGui');
@@ -2080,11 +2095,9 @@ do
         end;
 
         ToggleRegion.InputBegan:Connect(function(Input)
-            local IsTouch = Input.UserInputType == Enum.UserInputType.Touch;
-            local IsMouse = Input.UserInputType == Enum.UserInputType.MouseButton1;
-            if not (IsMouse or IsTouch) then return end;
-            local PX = IsTouch and Input.Position.X or Mouse.X;
-            local PY = IsTouch and Input.Position.Y or Mouse.Y;
+            if not IsClickInput(Input) then return end;
+            local PX = Input.Position.X;
+            local PY = Input.Position.Y;
             if not Library:MouseIsOverOpenedFrame(PX, PY) then
                 Toggle:SetValue(not Toggle.Value);
                 Library:AttemptSave();
@@ -2295,94 +2308,40 @@ do
         end;
 
         local function OnSliderDown(Input)
-            local IsTouch = Input.UserInputType == Enum.UserInputType.Touch;
-            local IsMouse = Input.UserInputType == Enum.UserInputType.MouseButton1;
-            if not (IsMouse or IsTouch) then return end;
-            local iPX = IsTouch and Input.Position.X or Mouse.X;
-            local iPY = IsTouch and Input.Position.Y or Mouse.Y;
-            if not Library:MouseIsOverOpenedFrame(iPX, iPY) then
-                -- Pour le tactile on utilise Input.Position ; pour la souris on utilise Mouse.X
-                local function GetCurrentX()
-                    if IsTouch then
-                        return Input.Position.X;
-                    else
-                        return Mouse.X;
-                    end
-                end
+            if not IsClickInput(Input) then return end;
+            if Library:MouseIsOverOpenedFrame(Input.Position.X, Input.Position.Y) then return end;
 
-                local mPos = GetCurrentX();
-                local gPos = Fill.Size.X.Offset;
-                local Diff = mPos - (Fill.AbsolutePosition.X + gPos);
+            local mPos = Mouse.X;
+            local gPos = Fill.Size.X.Offset;
+            local Diff = mPos - (Fill.AbsolutePosition.X + gPos);
 
-                -- Pour le tactile on suit InputChanged sur cet objet Input précis
-                if IsTouch then
-                    local TouchPos = mPos;
-                    local Connection;
-                    Connection = InputService.InputChanged:Connect(function(ChangedInput)
-                        if ChangedInput ~= Input then return end;
-                        TouchPos = ChangedInput.Position.X;
-                    end);
+            while IsDragInput(Input) do
+                local nX = math.clamp(gPos + (Mouse.X - mPos) + Diff, 0, Slider.MaxSize);
+                local nValue = Slider:GetValueFromXOffset(nX);
+                local OldValue = Slider.Value;
+                Slider.Value = nValue;
 
-                    repeat
-                        local nX = math.clamp(gPos + (TouchPos - mPos) + Diff, 0, Slider.MaxSize);
-                        local nValue = Slider:GetValueFromXOffset(nX);
-                        local OldValue = Slider.Value;
-                        Slider.Value = nValue;
+                local dX = math.ceil(Library:MapValue(Slider.Value, Slider.Min, Slider.Max, 0, Slider.MaxSize));
+                Fill.Size = UDim2.new(0, dX, 1, 0);
+                HideBorderRight.Visible = not (dX == Slider.MaxSize or dX == 0);
 
-                        local dX = math.ceil(Library:MapValue(Slider.Value, Slider.Min, Slider.Max, 0, Slider.MaxSize));
-                        Fill.Size = UDim2.new(0, dX, 1, 0);
-                        HideBorderRight.Visible = not (dX == Slider.MaxSize or dX == 0);
-
-                        if Info.Compact then
-                            DisplayLabel.Text = Info.Text .. ': ' .. Slider.Value .. (Info.Suffix or '');
-                        elseif Info.HideMax then
-                            DisplayLabel.Text = string.format('%s', Slider.Value .. (Info.Suffix or ''));
-                        else
-                            DisplayLabel.Text = string.format('%s/%s', Slider.Value .. (Info.Suffix or ''), Slider.Max .. (Info.Suffix or ''));
-                        end;
-
-                        if nValue ~= OldValue then
-                            Library:SafeCallback(Slider.Callback, Slider.Value);
-                            Library:SafeCallback(Slider.Changed, Slider.Value);
-                        end;
-
-                        RenderStepped:Wait();
-                    until Input.UserInputState == Enum.UserInputState.End;
-
-                    Connection:Disconnect();
+                if Info.Compact then
+                    DisplayLabel.Text = Info.Text .. ': ' .. Slider.Value .. (Info.Suffix or '');
+                elseif Info.HideMax then
+                    DisplayLabel.Text = string.format('%s', Slider.Value .. (Info.Suffix or ''));
                 else
-                    while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                        local nMPos = Mouse.X;
-                        local nX = math.clamp(gPos + (nMPos - mPos) + Diff, 0, Slider.MaxSize);
-
-                        local nValue = Slider:GetValueFromXOffset(nX);
-                        local OldValue = Slider.Value;
-                        Slider.Value = nValue;
-
-                        -- direct set while dragging (tween would lag behind the cursor)
-                        local dX = math.ceil(Library:MapValue(Slider.Value, Slider.Min, Slider.Max, 0, Slider.MaxSize));
-                        Fill.Size = UDim2.new(0, dX, 1, 0);
-                        HideBorderRight.Visible = not (dX == Slider.MaxSize or dX == 0);
-
-                        if Info.Compact then
-                            DisplayLabel.Text = Info.Text .. ': ' .. Slider.Value .. (Info.Suffix or '');
-                        elseif Info.HideMax then
-                            DisplayLabel.Text = string.format('%s', Slider.Value .. (Info.Suffix or ''));
-                        else
-                            DisplayLabel.Text = string.format('%s/%s', Slider.Value .. (Info.Suffix or ''), Slider.Max .. (Info.Suffix or ''));
-                        end;
-
-                        if nValue ~= OldValue then
-                            Library:SafeCallback(Slider.Callback, Slider.Value);
-                            Library:SafeCallback(Slider.Changed, Slider.Value);
-                        end;
-
-                        RenderStepped:Wait();
-                    end;
+                    DisplayLabel.Text = string.format('%s/%s', Slider.Value .. (Info.Suffix or ''), Slider.Max .. (Info.Suffix or ''));
                 end;
 
-                Library:AttemptSave();
+                if nValue ~= OldValue then
+                    Library:SafeCallback(Slider.Callback, Slider.Value);
+                    Library:SafeCallback(Slider.Changed, Slider.Value);
+                end;
+
+                RenderStepped:Wait();
             end;
+
+            Library:AttemptSave();
         end;
 
         -- zone de drag élargie au doigt (mobile uniquement, invisible, hors layout)
