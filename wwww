@@ -23,6 +23,65 @@ local Options = {};
 getgenv().Toggles = Toggles;
 getgenv().Options = Options;
 
+--============================================================
+--  Tween helper (TweenService)
+--============================================================
+local TweenConfig = {
+    Toggle = 0.20;
+    Slider = 0.15;
+    Dropdown = 0.18;
+    Hover = 0.12;
+};
+
+local function Tween(Object, Time, Properties, EasingStyle, EasingDirection)
+    if (not Object) or (not Object.Parent) then return end;
+
+    local Info = TweenInfo.new(
+        Time or 0.2,
+        EasingStyle or Enum.EasingStyle.Quad,
+        EasingDirection or Enum.EasingDirection.Out
+    );
+
+    local Ok, TweenObj = pcall(function()
+        return TweenService:Create(Object, Info, Properties);
+    end);
+
+    if Ok and TweenObj then
+        TweenObj:Play();
+    else
+        for Prop, Val in next, Properties do
+            Object[Prop] = Val;
+        end;
+    end;
+
+    return TweenObj;
+end
+
+--============================================================
+--  Mobile / touch helpers
+--============================================================
+local IsMobile = (InputService.TouchEnabled and not InputService.MouseEnabled);
+local IsTouch = (InputService.TouchEnabled or InputService.GamepadEnabled);
+
+-- agrandit les zones tactiles (un doigt ≠ une souris)
+local function TouchPad(Height)
+    return IsMobile and math.max(Height, 26) or Height;
+end;
+
+-- garde un frame dans l'écran (mobile : ColorPicker / Dropdown)
+local function ClampToScreen(Position, Size)
+    local Cam = workspace.CurrentCamera;
+    local VP = (Cam and Cam.ViewportSize.X > 0) and Cam.ViewportSize or ScreenGui.AbsoluteSize;
+
+    local W = Size and Size.X.Offset or 0;
+    local H = Size and Size.Y.Offset or 0;
+
+    return UDim2.fromOffset(
+        math.clamp(Position.X.Offset, 4, math.max(4, VP.X - W - 4)),
+        math.clamp(Position.Y.Offset, 4, math.max(4, VP.Y - H - 4))
+    );
+end;
+
 local Library = {
     Registry = {};
     RegistryMap = {};
@@ -267,24 +326,42 @@ end
 function Library:OnHighlight(HighlightInstance, Instance, Properties, PropertiesDefault)
     HighlightInstance.MouseEnter:Connect(function()
         local Reg = Library.RegistryMap[Instance];
+        local Goal = {};
 
         for Property, ColorIdx in next, Properties do
-            Instance[Property] = Library[ColorIdx] or ColorIdx;
+            Goal[Property] = Library[ColorIdx] or ColorIdx;
 
             if Reg and Reg.Properties[Property] then
                 Reg.Properties[Property] = ColorIdx;
+            end;
+        end;
+
+        if TweenConfig.Hover > 0 then
+            Tween(Instance, TweenConfig.Hover, Goal);
+        else
+            for Property, Value in next, Goal do
+                Instance[Property] = Value;
             end;
         end;
     end)
 
     HighlightInstance.MouseLeave:Connect(function()
         local Reg = Library.RegistryMap[Instance];
+        local Goal = {};
 
         for Property, ColorIdx in next, PropertiesDefault do
-            Instance[Property] = Library[ColorIdx] or ColorIdx;
+            Goal[Property] = Library[ColorIdx] or ColorIdx;
 
             if Reg and Reg.Properties[Property] then
                 Reg.Properties[Property] = ColorIdx;
+            end;
+        end;
+
+        if TweenConfig.Hover > 0 then
+            Tween(Instance, TweenConfig.Hover, Goal);
+        else
+            for Property, Value in next, Goal do
+                Instance[Property] = Value;
             end;
         end;
     end)
@@ -454,7 +531,7 @@ do
             BackgroundColor3 = ColorPicker.Value;
             BorderColor3 = Library:GetDarkerColor(ColorPicker.Value);
             BorderMode = Enum.BorderMode.Inset;
-            Size = UDim2.new(0, 24, 0, 12);
+            Size = UDim2.new(0, IsMobile and 34 or 24, 0, IsMobile and 22 or 12);
             LayoutOrder = 2;
             ZIndex = 6;
             Parent = ToggleLabel;
@@ -479,7 +556,7 @@ do
             Name = 'Color';
             BackgroundColor3 = Color3.new(1, 1, 1);
             BorderColor3 = Color3.new(0, 0, 0);
-            Position = UDim2.fromOffset(DisplayFrame.AbsolutePosition.X, DisplayFrame.AbsolutePosition.Y + 18),
+            Position = ClampToScreen(UDim2.fromOffset(DisplayFrame.AbsolutePosition.X, DisplayFrame.AbsolutePosition.Y + 18), UDim2.fromOffset(230, Info.Transparency and 271 or 253)),
             Size = UDim2.fromOffset(230, Info.Transparency and 271 or 253);
             Visible = false;
             ZIndex = 15;
@@ -487,7 +564,7 @@ do
         });
 
         DisplayFrame:GetPropertyChangedSignal('AbsolutePosition'):Connect(function()
-            PickerFrameOuter.Position = UDim2.fromOffset(DisplayFrame.AbsolutePosition.X, DisplayFrame.AbsolutePosition.Y + 18);
+            PickerFrameOuter.Position = ClampToScreen(UDim2.fromOffset(DisplayFrame.AbsolutePosition.X, DisplayFrame.AbsolutePosition.Y + 18), PickerFrameOuter.Size);
         end)
 
         local PickerFrameInner = Library:Create('Frame', {
@@ -1448,7 +1525,7 @@ do
             local Outer = Library:Create('Frame', {
                 BackgroundColor3 = Color3.new(0, 0, 0);
                 BorderColor3 = Color3.new(0, 0, 0);
-                Size = UDim2.new(1, 0, 0, 22);
+                Size = UDim2.new(1, 0, 0, IsMobile and 28 or 22);
                 ZIndex = 5;
             });
 
@@ -1855,6 +1932,9 @@ do
             Parent = Container;
         });
 
+        local ToggleScale = Instance.new('UIScale', ToggleOuter);
+        ToggleScale.Scale = 1;
+
         Library:AddToRegistry(ToggleOuter, {
             BorderColor3 = 'Black';
         });
@@ -1900,7 +1980,9 @@ do
 
         local ToggleRegion = Library:Create('Frame', {
             BackgroundTransparency = 1;
-            Size = UDim2.new(0, 170, 1, 0);
+            AnchorPoint = Vector2.new(0, 0.5);
+            Position = UDim2.new(0, 0, 0.5, 0);
+            Size = UDim2.new(0, 170, 0, TouchPad(14));
             ZIndex = 8;
             Parent = ToggleOuter;
         });
@@ -1941,11 +2023,32 @@ do
         end;
 
         function Toggle:Display()
-            ToggleInner.BackgroundColor3 = Toggle.Value and Library.AccentColor or Library.MainColor;
-            ToggleInner.BorderColor3 = Toggle.Value and Library.AccentColorDark or Library.OutlineColor;
+            local TargetBg = Toggle.Value and Library.AccentColor or Library.MainColor;
+            local TargetBorder = Toggle.Value and Library.AccentColorDark or Library.OutlineColor;
 
             Library.RegistryMap[ToggleInner].Properties.BackgroundColor3 = Toggle.Value and 'AccentColor' or 'MainColor';
             Library.RegistryMap[ToggleInner].Properties.BorderColor3 = Toggle.Value and 'AccentColorDark' or 'OutlineColor';
+
+            if TweenConfig.Toggle > 0 then
+                Tween(ToggleInner, TweenConfig.Toggle, {
+                    BackgroundColor3 = TargetBg;
+                    BorderColor3 = TargetBorder;
+                });
+
+                Tween(ToggleScale, TweenConfig.Toggle, {
+                    Scale = Toggle.Value and 1.22 or 0.85
+                }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+
+                task.delay(TweenConfig.Toggle, function()
+                    if ToggleScale and ToggleScale.Parent then
+                        Tween(ToggleScale, TweenConfig.Toggle * 0.8, { Scale = 1 },
+                            Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+                    end;
+                end);
+            else
+                ToggleInner.BackgroundColor3 = TargetBg;
+                ToggleInner.BorderColor3 = TargetBorder;
+            end;
         end;
 
         function Toggle:OnChanged(Func)
@@ -2098,6 +2201,23 @@ do
             { BorderColor3 = 'Black' }
         );
 
+        -- MaxSize suit la largeur réelle du slider (responsive PC/mobile)
+        local function UpdateSliderMaxSize()
+            local W = SliderInner.AbsoluteSize.X;
+
+            if W > 0 then
+                local NewMax = math.max(60, math.floor(W - 2));
+
+                if NewMax ~= Slider.MaxSize then
+                    Slider.MaxSize = NewMax;
+                    Slider:Display();
+                end;
+            end;
+        end;
+
+        SliderInner:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateSliderMaxSize);
+        task.defer(UpdateSliderMaxSize);
+
         if type(Info.Tooltip) == 'string' then
             Library:AddToolTip(Info.Tooltip, SliderOuter)
         end
@@ -2119,9 +2239,14 @@ do
             end
 
             local X = math.ceil(Library:MapValue(Slider.Value, Slider.Min, Slider.Max, 0, Slider.MaxSize));
-            Fill.Size = UDim2.new(0, X, 1, 0);
 
             HideBorderRight.Visible = not (X == Slider.MaxSize or X == 0);
+
+            if TweenConfig.Slider > 0 then
+                Tween(Fill, TweenConfig.Slider, { Size = UDim2.new(0, X, 1, 0) });
+            else
+                Fill.Size = UDim2.new(0, X, 1, 0);
+            end;
         end;
 
         function Slider:OnChanged(Func)
@@ -2158,7 +2283,7 @@ do
             Library:SafeCallback(Slider.Changed, Slider.Value);
         end;
 
-        SliderInner.InputBegan:Connect(function(Input)
+        local function OnSliderDown(Input)
             if Input.UserInputType == Enum.UserInputType.MouseButton1 and not Library:MouseIsOverOpenedFrame() then
                 local mPos = Mouse.X;
                 local gPos = Fill.Size.X.Offset;
@@ -2172,7 +2297,18 @@ do
                     local OldValue = Slider.Value;
                     Slider.Value = nValue;
 
-                    Slider:Display();
+                    -- direct set while dragging (tween would lag behind the cursor)
+                    local dX = math.ceil(Library:MapValue(Slider.Value, Slider.Min, Slider.Max, 0, Slider.MaxSize));
+                    Fill.Size = UDim2.new(0, dX, 1, 0);
+                    HideBorderRight.Visible = not (dX == Slider.MaxSize or dX == 0);
+
+                    if Info.Compact then
+                        DisplayLabel.Text = Info.Text .. ': ' .. Slider.Value .. (Info.Suffix or '');
+                    elseif Info.HideMax then
+                        DisplayLabel.Text = string.format('%s', Slider.Value .. (Info.Suffix or ''));
+                    else
+                        DisplayLabel.Text = string.format('%s/%s', Slider.Value .. (Info.Suffix or ''), Slider.Max .. (Info.Suffix or ''));
+                    end;
 
                     if nValue ~= OldValue then
                         Library:SafeCallback(Slider.Callback, Slider.Value);
@@ -2184,7 +2320,24 @@ do
 
                 Library:AttemptSave();
             end;
-        end);
+        end;
+
+        -- zone de drag élargie au doigt (mobile uniquement, invisible, hors layout)
+        if IsMobile then
+            local SliderTouchZone = Library:Create('Frame', {
+                BackgroundTransparency = 1;
+                AnchorPoint = Vector2.new(0, 0.5);
+                Position = UDim2.new(0, 0, 0.5, 0);
+                Size = UDim2.new(1, 0, 0, 26);
+                ZIndex = 8;
+                Active = true;
+                Parent = SliderOuter;
+            });
+
+            SliderTouchZone.InputBegan:Connect(OnSliderDown);
+        end;
+
+        SliderInner.InputBegan:Connect(OnSliderDown);
 
         Slider:Display();
         Groupbox:AddBlank(Info.BlankSize or 6);
@@ -2245,10 +2398,12 @@ do
             end;
         end;
 
+        local DROPDOWN_ITEM_H = IsMobile and 26 or 20;
+
         local DropdownOuter = Library:Create('Frame', {
             BackgroundColor3 = Color3.new(0, 0, 0);
             BorderColor3 = Color3.new(0, 0, 0);
-            Size = UDim2.new(1, -4, 0, 20);
+            Size = UDim2.new(1, -4, 0, DROPDOWN_ITEM_H);
             ZIndex = 5;
             Parent = Container;
         });
@@ -2321,11 +2476,26 @@ do
         });
 
         local function RecalculateListPosition()
-            ListOuter.Position = UDim2.fromOffset(DropdownOuter.AbsolutePosition.X, DropdownOuter.AbsolutePosition.Y + DropdownOuter.Size.Y.Offset + 1);
+            local X = DropdownOuter.AbsolutePosition.X;
+            local Y = DropdownOuter.AbsolutePosition.Y + DropdownOuter.Size.Y.Offset + 1;
+
+            -- sur mobile, ouvre la liste vers le haut si elle dépasse en bas
+            local Cam = workspace.CurrentCamera;
+            local VP = (Cam and Cam.ViewportSize.X > 0) and Cam.ViewportSize or ScreenGui.AbsoluteSize;
+            local ListH = ListOuter.Size.Y.Offset;
+
+            if (Y + ListH) > (VP.Y - 4) and (DropdownOuter.AbsolutePosition.Y - ListH - 1) > 4 then
+                Y = DropdownOuter.AbsolutePosition.Y - ListH - 1;
+            end;
+
+            ListOuter.Position = UDim2.fromOffset(
+                math.clamp(X, 4, math.max(4, VP.X - ListOuter.Size.X.Offset - 4)),
+                math.clamp(Y, 4, math.max(4, VP.Y - ListH - 4))
+            );
         end;
 
         local function RecalculateListSize(YSize)
-            ListOuter.Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, YSize or (MAX_DROPDOWN_ITEMS * 20 + 2))
+            ListOuter.Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, YSize or (MAX_DROPDOWN_ITEMS * DROPDOWN_ITEM_H + 2))
         end;
 
         RecalculateListPosition();
@@ -2428,7 +2598,7 @@ do
                     BackgroundColor3 = Library.MainColor;
                     BorderColor3 = Library.OutlineColor;
                     BorderMode = Enum.BorderMode.Middle;
-                    Size = UDim2.new(1, -1, 0, 20);
+                    Size = UDim2.new(1, -1, 0, DROPDOWN_ITEM_H);
                     ZIndex = 23;
                     Active = true,
                     Parent = Scrolling;
@@ -2519,9 +2689,9 @@ do
                 Buttons[Button] = Table;
             end;
 
-            Scrolling.CanvasSize = UDim2.fromOffset(0, (Count * 20) + 1);
+            Scrolling.CanvasSize = UDim2.fromOffset(0, (Count * DROPDOWN_ITEM_H) + 1);
 
-            local Y = math.clamp(Count * 20, 0, MAX_DROPDOWN_ITEMS * 20) + 1;
+            local Y = math.clamp(Count * DROPDOWN_ITEM_H, 0, MAX_DROPDOWN_ITEMS * DROPDOWN_ITEM_H) + 1;
             RecalculateListSize(Y);
         end;
 
@@ -2536,13 +2706,44 @@ do
         function Dropdown:OpenDropdown()
             ListOuter.Visible = true;
             Library.OpenedFrames[ListOuter] = true;
-            DropdownArrow.Rotation = 180;
+
+            RecalculateListSize();
+            RecalculateListPosition();
+
+            if TweenConfig.Dropdown > 0 then
+                Tween(DropdownArrow, TweenConfig.Dropdown, { Rotation = 180 },
+                    Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+
+                ListOuter.Size = UDim2.fromOffset(ListOuter.Size.X.Offset, 0);
+                Tween(ListOuter, TweenConfig.Dropdown, {
+                    Size = UDim2.fromOffset(ListOuter.Size.X.Offset, math.clamp(#Dropdown.Values * DROPDOWN_ITEM_H, 0, MAX_DROPDOWN_ITEMS * DROPDOWN_ITEM_H) + 1)
+                }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+            else
+                DropdownArrow.Rotation = 180;
+            end;
         end;
 
         function Dropdown:CloseDropdown()
-            ListOuter.Visible = false;
             Library.OpenedFrames[ListOuter] = nil;
-            DropdownArrow.Rotation = 0;
+
+            if TweenConfig.Dropdown > 0 then
+                Tween(DropdownArrow, TweenConfig.Dropdown, { Rotation = 0 },
+                    Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+
+                local CurrentSize = ListOuter.Size;
+                Tween(ListOuter, TweenConfig.Dropdown, {
+                    Size = UDim2.fromOffset(CurrentSize.X.Offset, 0)
+                }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+
+                task.delay(TweenConfig.Dropdown, function()
+                    if ListOuter and not Library.OpenedFrames[ListOuter] then
+                        ListOuter.Visible = false;
+                    end;
+                end);
+            else
+                ListOuter.Visible = false;
+                DropdownArrow.Rotation = 0;
+            end;
         end;
 
         function Dropdown:OnChanged(Func)
@@ -3206,6 +3407,13 @@ end;
 function Library:Notify(Text, Time)
     local XSize, YSize = Library:GetTextBounds(Text, Library.Font, 14);
 
+    -- la notif ne doit jamais dépasser de l'écran (mobile)
+    do
+        local Cam = workspace.CurrentCamera;
+        local VP = (Cam and Cam.ViewportSize.X > 0) and Cam.ViewportSize or ScreenGui.AbsoluteSize;
+        XSize = math.min(XSize, math.max(120, VP.X - 112));
+    end;
+
     YSize = YSize + 7
 
     local NotifyOuter = Library:Create('Frame', {
@@ -3317,6 +3525,48 @@ function Library:CreateWindow(...)
         Config.Position = UDim2.fromScale(0.5, 0.5)
     end
 
+    --============================================================
+    --  Auto size (adapte le menu à l'écran, PC & mobile)
+    --============================================================
+    local AutoSize = (Config.AutoSize ~= false);
+    local ViewportMargin = (type(Config.Margin) == 'number') and Config.Margin or 16;
+    local MinScale = (type(Config.MinScale) == 'number') and Config.MinScale or 0.62;
+    local MaxScale = (type(Config.MaxScale) == 'number') and Config.MaxScale or 1.5;
+    local MaxSizeCfg = typeof(Config.MaxSize) == 'UDim2' and Config.MaxSize or nil;
+
+    local function GetViewport()
+        local Cam = workspace.CurrentCamera;
+        if Cam and Cam.ViewportSize.X > 0 then
+            return Cam.ViewportSize;
+        end;
+        return ScreenGui.AbsoluteSize;
+    end;
+
+    -- garde le ratio d'origine ("carré") mais rentre dans l'écran
+    local function GetFittedSize()
+        local BaseW = math.max(Config.Size.X.Offset, 320);
+        local BaseH = math.max(Config.Size.Y.Offset, 260);
+
+        if (not AutoSize) then
+            return UDim2.fromOffset(BaseW, BaseH);
+        end;
+
+        local VP = GetViewport();
+        local MaxW = math.max(300, VP.X - (ViewportMargin * 2));
+        local MaxH = math.max(240, VP.Y - (ViewportMargin * 2));
+
+        -- plafond optionnel (évite un menu immense sur très grand écran)
+        if MaxSizeCfg then
+            MaxW = math.min(MaxW, math.max(MaxSizeCfg.X.Offset, BaseW));
+            MaxH = math.min(MaxH, math.max(MaxSizeCfg.Y.Offset, BaseH));
+        end;
+
+        local Scale = math.min(MaxW / BaseW, MaxH / BaseH);
+        Scale = math.clamp(Scale, MinScale, MaxScale);
+
+        return UDim2.fromOffset(math.floor(BaseW * Scale), math.floor(BaseH * Scale));
+    end;
+
     local Window = {
         Tabs = {};
     };
@@ -3326,11 +3576,45 @@ function Library:CreateWindow(...)
         BackgroundColor3 = Color3.fromRGB(12, 12, 12);
         BorderColor3 = Color3.new(0, 0, 0);
         Position = Config.Position,
-        Size = Config.Size,
+        Size = GetFittedSize(),
         Visible = false,
         ZIndex = 1;
         Parent = ScreenGui;
     });
+
+    if AutoSize then
+        local function RefreshWindowSize()
+            if (not Outer) or (not Outer.Parent) then return end;
+
+            Outer.Size = GetFittedSize();
+
+            -- recentre si le menu sort de l'écran (rotation / resize mobile)
+            if Outer.Position.X.Scale == 0 then
+                local VP = GetViewport();
+                local X = Outer.AbsolutePosition.X;
+                local Y = Outer.AbsolutePosition.Y;
+                local W = Outer.AbsoluteSize.X;
+                local H = Outer.AbsoluteSize.Y;
+
+                if (X + W) > (VP.X - 8) or (Y + H) > (VP.Y - 8) or X < 8 or Y < 8 then
+                    Outer.Position = UDim2.fromOffset(
+                        math.clamp(X, 8, math.max(8, VP.X - W - 8)),
+                        math.clamp(Y, 8, math.max(8, VP.Y - H - 8))
+                    );
+                end;
+            end;
+        end;
+
+        local Cam = workspace.CurrentCamera;
+
+        if Cam then
+            Cam:GetPropertyChangedSignal('ViewportSize'):Connect(RefreshWindowSize);
+        end;
+
+        ScreenGui:GetPropertyChangedSignal('AbsoluteSize'):Connect(RefreshWindowSize);
+
+        task.defer(RefreshWindowSize);
+    end;
 
     Library:MakeDraggable(Outer, 30);
 
@@ -3963,6 +4247,66 @@ function Library:CreateWindow(...)
             task.spawn(Library.Toggle)
         end
     end))
+
+    --============================================================
+    --  Bouton flottant d'ouverture (mobile / tactile : pas de clavier)
+    --============================================================
+    local OpenButton = Library:Create('TextButton', {
+        BackgroundColor3 = Library.AccentColor;
+        BorderColor3 = Library.AccentColorDark;
+        BorderMode = Enum.BorderMode.Inset;
+        AnchorPoint = Vector2.new(1, 0.5);
+        Position = UDim2.new(1, -20, 0.5, 0);
+        Size = UDim2.new(0, 46, 0, 46);
+        Text = 'GS';
+        TextColor3 = Color3.new(1, 1, 1);
+        TextSize = 16;
+        Font = Library.Font;
+        AutoButtonColor = false;
+        ZIndex = 50;
+        Visible = IsTouch;
+        Parent = ScreenGui;
+    });
+
+    Library:AddToRegistry(OpenButton, {
+        BackgroundColor3 = 'AccentColor';
+        BorderColor3 = 'AccentColorDark';
+    });
+
+    -- déplaçable + tap pour ouvrir/fermer (pas de MouseButton1Click : évite le toggle après un drag)
+    Library:GiveSignal(OpenButton.InputBegan:Connect(function(Input)
+        if Input.UserInputType ~= Enum.UserInputType.MouseButton1
+            and Input.UserInputType ~= Enum.UserInputType.Touch then
+            return;
+        end;
+
+        local StartX, StartY = Mouse.X, Mouse.Y;
+        local StartAbs = OpenButton.AbsolutePosition;
+        local Moved = false;
+
+        while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+            local DX, DY = Mouse.X - StartX, Mouse.Y - StartY;
+
+            if (math.abs(DX) > 6) or (math.abs(DY) > 6) then
+                Moved = true;
+            end;
+
+            local VP = GetViewport();
+            local W, H = OpenButton.AbsoluteSize.X, OpenButton.AbsoluteSize.Y;
+
+            OpenButton.AnchorPoint = Vector2.zero;
+            OpenButton.Position = UDim2.fromOffset(
+                math.clamp(StartAbs.X + DX, 6, math.max(6, VP.X - W - 6)),
+                math.clamp(StartAbs.Y + DY, 6, math.max(6, VP.Y - H - 6))
+            );
+
+            RenderStepped:Wait();
+        end;
+
+        if (not Moved) then
+            Library:Toggle();
+        end;
+    end));
 
     if Config.AutoShow then task.spawn(Library.Toggle) end
 
