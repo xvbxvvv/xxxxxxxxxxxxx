@@ -104,11 +104,11 @@ local Library = {
     HudRegistry = {};
 
     FontColor = Color3.fromRGB(255, 255, 255);
-    MainColor = Color3.fromRGB(26, 22, 43);
-    BackgroundColor = Color3.fromRGB(18, 14, 32);
-    AccentColor = Color3.fromRGB(224, 36, 170);
-    AccentColorDark = Color3.fromRGB(160, 25, 122);
-    OutlineColor = Color3.fromRGB(56, 47, 88);
+    MainColor = Color3.fromRGB(20, 20, 20);
+    BackgroundColor = Color3.fromRGB(12, 12, 12);
+    AccentColor = Color3.fromRGB(255, 255, 255);
+    AccentColorDark = Color3.fromRGB(160, 160, 160);
+    OutlineColor = Color3.fromRGB(40, 40, 40);
     RiskColor = Color3.fromRGB(255, 50, 50);
 
     Black = Color3.new(0, 0, 0);
@@ -134,7 +134,17 @@ local Library = {
         Players = 'rbxassetid://15016878198',
         Profile = 'rbxassetid://15016878198',
         Default = 'rbxassetid://7059346373',
+        crosshair = 'rbxassetid://18484264435',
+        Aimbot = 'rbxassetid://18484264435',
+        eye = 'rbxassetid://5881046614',
+        ESP = 'rbxassetid://5881046614',
+        circle = 'rbxassetid://5881046614',
+        FOV = 'rbxassetid://5881046614',
+        maximize = 'rbxassetid://5881046614',
+        wrench = 'rbxassetid://78388764182737',
+        ['UI Settings'] = 'rbxassetid://78388764182737',
     };
+    ShowCustomCursor = false;
 };
 
 local RainbowStep = 0
@@ -3661,7 +3671,27 @@ function Library:SetWatermark(Text, IconUrl)
     UpdateWatermarkDisplay();
 end;
 
+function Library:SetNotifySide(Side)
+    if not Library.NotificationArea then return end
+    if Side == 'Right' or Side == 'right' then
+        Library.NotificationArea.Position = UDim2.new(1, -310, 0, 40)
+    else
+        Library.NotificationArea.Position = UDim2.new(0, 0, 0, 40)
+    end
+end;
+
 function Library:Notify(Text, Time)
+    if type(Text) == 'table' then
+        Time = Time or Text.Time;
+        local body = Text.Content or Text.Text or '';
+        if Text.Title and Text.Title ~= '' then
+            Text = Text.Title .. ': ' .. body;
+        else
+            Text = body;
+        end;
+    end;
+    Text = tostring(Text or '');
+
     local XSize, YSize = Library:GetTextBounds(Text, Library.Font, 14);
 
     -- la notif ne doit jamais dépasser de l'écran (mobile)
@@ -4191,6 +4221,17 @@ function Library:CreateWindow(...)
         function Tab:AddGroupbox(Info)
             local Groupbox = {};
 
+            local isLeft = true;
+            local boxName = 'Groupbox';
+            if type(Info) == 'table' then
+                if Info.Side == 2 or Info.Side == 'Right' or Info.Side == 'right' then
+                    isLeft = false;
+                end;
+                boxName = Info.Name or Info.Title or boxName;
+            elseif type(Info) == 'string' then
+                boxName = Info;
+            end;
+
             local BoxOuter = Library:Create('Frame', {
                 BackgroundColor3 = Library.BackgroundColor;
                 BorderColor3 = Library.OutlineColor;
@@ -4198,7 +4239,7 @@ function Library:CreateWindow(...)
                 Size = UDim2.new(1, 0, 0, 50);
                 ClipsDescendants = false;
                 ZIndex = 2;
-                Parent = Info.Side == 1 and LeftSide or RightSide;
+                Parent = isLeft and LeftSide or RightSide;
             });
 
             Library:AddToRegistry(BoxOuter, {
@@ -4206,7 +4247,7 @@ function Library:CreateWindow(...)
                 BorderColor3 = 'OutlineColor';
             });
 
-            local titleWidth = Library:GetTextBounds(Info.Name, Library.Font, 13) + 10;
+            local titleWidth = Library:GetTextBounds(boxName, Library.Font, 13) + 10;
             local GroupboxLabel = Library:CreateLabel({
                 BackgroundColor3 = Library.BackgroundColor;
                 BackgroundTransparency = 0;
@@ -4259,7 +4300,7 @@ function Library:CreateWindow(...)
             Groupbox:AddBlank(3);
             Groupbox:Resize();
 
-            Tab.Groupboxes[Info.Name] = Groupbox;
+            Tab.Groupboxes[boxName] = Groupbox;
 
             return Groupbox;
         end;
@@ -4436,7 +4477,7 @@ function Library:CreateWindow(...)
                 end;
 
                 Button.InputBegan:Connect(function(Input)
-                    if Input.UserInputType == Enum.UserInputType.MouseButton1 and not Library:MouseIsOverOpenedFrame() then
+                    if (Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch) and not Library:MouseIsOverOpenedFrame() then
                         Tab:Show();
                         Tab:Resize();
                     end;
