@@ -252,32 +252,87 @@ function Library:CreateLabel(Properties, IsHud)
     return Library:Create(_Instance, Properties);
 end;
 
-function Library:MakeDraggable(Instance, Cutoff)
+function Library:MakeDraggable(Instance, DragFrame, Cutoff)
+    if type(DragFrame) == 'number' then
+        Cutoff = DragFrame;
+        DragFrame = Instance;
+    end;
+    DragFrame = DragFrame or Instance;
+
     Instance.Active = true;
+    DragFrame.Active = true;
 
-    Instance.InputBegan:Connect(function(Input)
-        if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local ObjPos = Vector2.new(
-                Mouse.X - Instance.AbsolutePosition.X,
-                Mouse.Y - Instance.AbsolutePosition.Y
-            );
-
-            if ObjPos.Y > (Cutoff or 40) then
-                return;
-            end;
-
-            while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                Instance.Position = UDim2.new(
-                    0,
-                    Mouse.X - ObjPos.X + (Instance.Size.X.Offset * Instance.AnchorPoint.X),
-                    0,
-                    Mouse.Y - ObjPos.Y + (Instance.Size.Y.Offset * Instance.AnchorPoint.Y)
-                );
-
-                RenderStepped:Wait();
-            end;
+    DragFrame.InputBegan:Connect(function(Input)
+        if Input.UserInputType ~= Enum.UserInputType.MouseButton1
+            and Input.UserInputType ~= Enum.UserInputType.Touch then
+            return;
         end;
-    end)
+
+        local startInputPos = Vector2.new(Input.Position.X, Input.Position.Y);
+        local relY = startInputPos.Y - Instance.AbsolutePosition.Y;
+
+        local effectiveCutoff = Cutoff;
+        if effectiveCutoff and Input.UserInputType == Enum.UserInputType.Touch then
+            effectiveCutoff = math.max(effectiveCutoff, 45);
+        end;
+
+        if effectiveCutoff and (relY > effectiveCutoff or relY < 0) then
+            return;
+        end;
+
+        local startFramePos = Instance.Position;
+        local activeInput = Input;
+        local dragging = true;
+
+        local moveConn
+        local endConn
+
+        local function Disconnect()
+            dragging = false;
+            if moveConn then moveConn:Disconnect(); moveConn = nil; end;
+            if endConn then endConn:Disconnect(); endConn = nil; end;
+        end;
+
+        moveConn = InputService.InputChanged:Connect(function(moveInput)
+            if not dragging then return end;
+
+            local isMatch = false;
+            if activeInput.UserInputType == Enum.UserInputType.Touch then
+                isMatch = (moveInput == activeInput)
+                    or (moveInput.UserInputType == Enum.UserInputType.Touch);
+            else
+                isMatch = (moveInput == activeInput)
+                    or (moveInput.UserInputType == Enum.UserInputType.MouseMovement);
+            end;
+
+            if isMatch and moveInput.Position then
+                local currentPos = Vector2.new(moveInput.Position.X, moveInput.Position.Y);
+                local delta = currentPos - startInputPos;
+
+                Instance.Position = UDim2.new(
+                    startFramePos.X.Scale,
+                    startFramePos.X.Offset + delta.X,
+                    startFramePos.Y.Scale,
+                    startFramePos.Y.Offset + delta.Y
+                );
+            end;
+        end);
+
+        endConn = InputService.InputEnded:Connect(function(endInput)
+            if endInput == activeInput
+                or (activeInput.UserInputType == Enum.UserInputType.MouseButton1 and endInput.UserInputType == Enum.UserInputType.MouseButton1)
+                or (activeInput.UserInputType == Enum.UserInputType.Touch and endInput.UserInputType == Enum.UserInputType.Touch) then
+                Disconnect();
+            end;
+        end);
+
+        activeInput.Changed:Connect(function()
+            if activeInput.UserInputState == Enum.UserInputState.End
+                or activeInput.UserInputState == Enum.UserInputState.Cancel then
+                Disconnect();
+            end;
+        end);
+    end);
 end;
 
 function Library:AddToolTip(InfoStr, HoverInstance)
@@ -1951,6 +2006,11 @@ do
             Parent = Container;
         });
 
+        Library:Create('UICorner', {
+            CornerRadius = UDim.new(0, 3);
+            Parent = ToggleOuter;
+        });
+
         local ToggleScale = Instance.new('UIScale', ToggleOuter);
         ToggleScale.Scale = 1;
 
@@ -1965,6 +2025,11 @@ do
             Size = UDim2.new(1, 0, 1, 0);
             ZIndex = 6;
             Parent = ToggleOuter;
+        });
+
+        Library:Create('UICorner', {
+            CornerRadius = UDim.new(0, 3);
+            Parent = ToggleInner;
         });
 
         Library:AddToRegistry(ToggleInner, {
@@ -2427,7 +2492,13 @@ do
             BorderColor3 = Color3.new(0, 0, 0);
             Size = UDim2.new(1, -4, 0, DROPDOWN_ITEM_H);
             ZIndex = 5;
+            Active = true;
             Parent = Container;
+        });
+
+        Library:Create('UICorner', {
+            CornerRadius = UDim.new(0, 4);
+            Parent = DropdownOuter;
         });
 
         Library:AddToRegistry(DropdownOuter, {
@@ -2441,6 +2512,11 @@ do
             Size = UDim2.new(1, 0, 1, 0);
             ZIndex = 6;
             Parent = DropdownOuter;
+        });
+
+        Library:Create('UICorner', {
+            CornerRadius = UDim.new(0, 4);
+            Parent = DropdownInner;
         });
 
         Library:AddToRegistry(DropdownInner, {
@@ -2497,6 +2573,11 @@ do
             Parent = ScreenGui;
         });
 
+        Library:Create('UICorner', {
+            CornerRadius = UDim.new(0, 4);
+            Parent = ListOuter;
+        });
+
         local function RecalculateListPosition()
             local X = DropdownOuter.AbsolutePosition.X;
             local Y = DropdownOuter.AbsolutePosition.Y + DropdownOuter.Size.Y.Offset + 1;
@@ -2533,6 +2614,11 @@ do
             Size = UDim2.new(1, 0, 1, 0);
             ZIndex = 21;
             Parent = ListOuter;
+        });
+
+        Library:Create('UICorner', {
+            CornerRadius = UDim.new(0, 4);
+            Parent = ListInner;
         });
 
         Library:AddToRegistry(ListInner, {
@@ -2622,9 +2708,15 @@ do
                     BorderMode = Enum.BorderMode.Middle;
                     Size = UDim2.new(1, -1, 0, DROPDOWN_ITEM_H);
                     ZIndex = 23;
-                    Active = true,
+                    Active = true;
                     Parent = Scrolling;
                 });
+
+                Library:Create('UICorner', {
+                    CornerRadius = UDim.new(0, 3);
+                    Parent = Button;
+                });
+
 
                 Library:AddToRegistry(Button, {
                     BackgroundColor3 = 'MainColor';
@@ -2667,7 +2759,7 @@ do
                 end;
 
                 ButtonLabel.InputBegan:Connect(function(Input)
-                    if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    if IsClickInput(Input) then
                         local Try = not Selected;
 
                         if Dropdown:GetActiveValues() == 1 and (not Try) and (not Info.AllowNull) then
@@ -2799,26 +2891,27 @@ do
         end;
 
         DropdownOuter.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 and not Library:MouseIsOverOpenedFrame() then
-                if ListOuter.Visible then
-                    Dropdown:CloseDropdown();
-                else
-                    Dropdown:OpenDropdown();
-                end;
+            if not IsClickInput(Input) then return end;
+            if Library:MouseIsOverOpenedFrame(Input.Position.X, Input.Position.Y) then return end;
+            if ListOuter.Visible then
+                Dropdown:CloseDropdown();
+            else
+                Dropdown:OpenDropdown();
             end;
         end);
 
-        InputService.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-                local AbsPos, AbsSize = ListOuter.AbsolutePosition, ListOuter.AbsoluteSize;
+        Library:GiveSignal(InputService.InputBegan:Connect(function(Input)
+            if not IsMouseInput(Input) then return end;
+            local PX = Input.Position.X;
+            local PY = Input.Position.Y;
+            local AbsPos, AbsSize = ListOuter.AbsolutePosition, ListOuter.AbsoluteSize;
 
-                if Mouse.X < AbsPos.X or Mouse.X > AbsPos.X + AbsSize.X
-                    or Mouse.Y < (AbsPos.Y - 20 - 1) or Mouse.Y > AbsPos.Y + AbsSize.Y then
+            if PX < AbsPos.X or PX > AbsPos.X + AbsSize.X
+                or PY < (AbsPos.Y - 20 - 1) or PY > AbsPos.Y + AbsSize.Y then
 
-                    Dropdown:CloseDropdown();
-                end;
+                Dropdown:CloseDropdown();
             end;
-        end);
+        end));
 
         Dropdown:BuildDropdownList();
         Dropdown:Display();
@@ -3285,6 +3378,32 @@ do
         BorderColor3 = 'OutlineColor';
     });
 
+    local WatermarkTopAccent = Library:Create('Frame', {
+        BackgroundColor3 = Library.AccentColor;
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, 0, 0, 0);
+        Size = UDim2.new(1, 0, 0, 2);
+        ZIndex = 205;
+        Parent = WatermarkInner;
+    });
+
+    Library:AddToRegistry(WatermarkTopAccent, {
+        BackgroundColor3 = 'AccentColor';
+    }, true);
+
+    local WatermarkIcon = Library:Create('ImageLabel', {
+        BackgroundTransparency = 1;
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, 5, 0.5, 1);
+        AnchorPoint = Vector2.new(0, 0.5);
+        Size = UDim2.fromOffset(14, 14);
+        Image = '';
+        ScaleType = Enum.ScaleType.Fit;
+        ZIndex = 204;
+        Visible = false;
+        Parent = WatermarkInner;
+    });
+
     local WatermarkLabel = Library:CreateLabel({
         Position = UDim2.new(0, 8, 0, 0);
         Size = UDim2.new(1, -16, 1, 0);
@@ -3296,6 +3415,9 @@ do
     });
 
     Library.Watermark = WatermarkOuter;
+    Library.WatermarkInner = WatermarkInner;
+    Library.WatermarkTopAccent = WatermarkTopAccent;
+    Library.WatermarkIcon = WatermarkIcon;
     Library.WatermarkText = WatermarkLabel;
     Library:MakeDraggable(Library.Watermark);
 
@@ -3375,7 +3497,65 @@ function Library:SetWatermarkVisibility(Bool)
     Library.Watermark.Visible = Bool;
 end;
 
-Library.WatermarkTitle = 'gamesense.pub | Linoria Fork Demo';
+Library.DefaultLogoUrl = 'https://github.com/xvbxvvv/logo/blob/main/0fb782bd-42a8-46bd-8a52-7df5bee0812a.jpg?raw=true';
+
+function Library:GetCustomAsset(url, filename)
+    if not url or url == '' then return '' end
+    if url:find('^rbxasset') then return url end
+
+    local user, repo, branch, file = url:match('github%.com/([^/]+)/([^/]+)/blob/([^/]+)/([^%?]+)')
+    local rawUrl = url
+    if user and repo and branch and file then
+        rawUrl = string.format('https://raw.githubusercontent.com/%s/%s/%s/%s', user, repo, branch, file)
+    end
+
+    filename = filename or 'gamesense_custom_asset.jpg'
+
+    local customAssetFunc = getcustomasset or getsynasset
+    if customAssetFunc and writefile and readfile and isfile then
+        if not isfile(filename) then
+            local ok, content = pcall(function()
+                return game:HttpGet(rawUrl)
+            end)
+            if ok and content and #content > 0 then
+                pcall(writefile, filename, content)
+            end
+        end
+
+        if isfile(filename) then
+            local ok, asset = pcall(customAssetFunc, filename)
+            if ok and asset then
+                return asset
+            end
+        end
+    end
+
+    return rawUrl
+end;
+
+function Library:SetWatermarkIcon(url)
+    if not Library.WatermarkIcon then return end
+    if url == false then
+        Library.WatermarkIcon.Visible = false
+        Library.WatermarkIcon.Image = ''
+        UpdateWatermarkDisplay()
+        return
+    end
+
+    url = (type(url) == 'string' and url) or Library.DefaultLogoUrl
+    Library.WatermarkIcon.Visible = true
+
+    task.spawn(function()
+        local asset = Library:GetCustomAsset(url, 'gamesense_watermark_logo.jpg')
+        if asset and asset ~= '' and Library.WatermarkIcon then
+            Library.WatermarkIcon.Image = asset
+            Library.WatermarkIcon.Visible = true
+            UpdateWatermarkDisplay()
+        end
+    end)
+end;
+
+Library.WatermarkTitle = 'gamesense.pub';
 local WatermarkFps = 60;
 local WatermarkPing = 0;
 local LastFpsUpdate = 0;
@@ -3389,21 +3569,46 @@ local function UpdateWatermarkDisplay()
 
     local base = Library.WatermarkTitle or 'gamesense.pub';
     local coloredBase = base;
+
+    local r = math.floor(Library.AccentColor.R * 255);
+    local g = math.floor(Library.AccentColor.G * 255);
+    local b = math.floor(Library.AccentColor.B * 255);
+    local accentHex = string.format('rgb(%d,%d,%d)', r, g, b);
+
     if coloredBase:find('sense') and not coloredBase:find('<font') then
         coloredBase = coloredBase:gsub('game', '<font color="rgb(255,255,255)">game</font>')
-                                 :gsub('sense', '<font color="rgb(87,128,178)">sense</font>')
+                                 :gsub('sense', string.format('<font color="%s">sense</font>', accentHex))
                                  :gsub('%.pub', '<font color="rgb(255,255,255)">.pub</font>');
+    elseif coloredBase:find(' - ') and not coloredBase:find('<font') then
+        local p1, p2 = coloredBase:match('^(.-)(%s*-%s*.*)$');
+        if p1 and p2 then
+            coloredBase = string.format('<font color="%s">%s</font><font color="rgb(255,255,255)">%s</font>', accentHex, p1, p2);
+        end;
     end;
     if coloredBase:find('Demo') and not coloredBase:find('<font color=.-Demo') then
-        coloredBase = coloredBase:gsub('Demo', '<font color="rgb(87,128,178)">Demo</font>');
+        coloredBase = coloredBase:gsub('Demo', string.format('<font color="%s">Demo</font>', accentHex));
     end;
 
-    local richText = string.format('%s <font color="rgb(90,90,90)">|</font> <font color="rgb(87,128,178)">%d</font> fps <font color="rgb(90,90,90)">|</font> <font color="rgb(87,128,178)">%d</font> ms', coloredBase, WatermarkFps, WatermarkPing);
+    local richText;
+    if Library.WatermarkShowStats == false then
+        richText = coloredBase;
+    else
+        richText = string.format('%s <font color="rgb(90,90,90)">|</font> <font color="%s">%d</font> fps <font color="rgb(90,90,90)">|</font> <font color="%s">%d</font> ms', coloredBase, accentHex, WatermarkFps, accentHex, WatermarkPing);
+    end;
     Library.WatermarkText.Text = richText;
 
     local plain = StripTags(richText);
     local X, _ = Library:GetTextBounds(plain, Library.Font, 13);
-    Library.Watermark.Size = UDim2.new(0, X + 18, 0, 24);
+
+    local hasIcon = Library.WatermarkIcon and Library.WatermarkIcon.Visible and Library.WatermarkIcon.Image ~= '';
+    local iconOffset = hasIcon and 22 or 0;
+
+    if Library.WatermarkText then
+        Library.WatermarkText.Position = UDim2.new(0, hasIcon and 24 or 8, 0, 0);
+        Library.WatermarkText.Size = UDim2.new(1, -(hasIcon and 28 or 16), 1, 0);
+    end;
+
+    Library.Watermark.Size = UDim2.new(0, X + 18 + iconOffset, 0, 24);
 end;
 
 table.insert(Library.Signals, RenderStepped:Connect(function(Delta)
@@ -3418,9 +3623,14 @@ table.insert(Library.Signals, RenderStepped:Connect(function(Delta)
     end;
 end));
 
-function Library:SetWatermark(Text)
+function Library:SetWatermark(Text, IconUrl)
     if type(Text) == 'string' and Text:len() > 0 then
         Library.WatermarkTitle = Text;
+    end;
+    if IconUrl ~= nil then
+        Library:SetWatermarkIcon(IconUrl);
+    elseif Library.WatermarkIcon and Library.WatermarkIcon.Image == '' then
+        Library:SetWatermarkIcon(Library.DefaultLogoUrl);
     end;
     Library:SetWatermarkVisibility(true);
     UpdateWatermarkDisplay();
@@ -3604,6 +3814,11 @@ function Library:CreateWindow(...)
         Parent = ScreenGui;
     });
 
+    Library:Create('UICorner', {
+        CornerRadius = UDim.new(0, 8);
+        Parent = Outer;
+    });
+
     if AutoSize then
         local function RefreshWindowSize()
             if (not Outer) or (not Outer.Parent) then return end;
@@ -3638,8 +3853,6 @@ function Library:CreateWindow(...)
         task.defer(RefreshWindowSize);
     end;
 
-    Library:MakeDraggable(Outer, 30);
-
     local BorderLayer = Library:Create('Frame', {
         BackgroundColor3 = Color3.fromRGB(48, 48, 48);
         BorderSizePixel = 0;
@@ -3647,6 +3860,11 @@ function Library:CreateWindow(...)
         Size = UDim2.new(1, -2, 1, -2);
         ZIndex = 1;
         Parent = Outer;
+    });
+
+    Library:Create('UICorner', {
+        CornerRadius = UDim.new(0, 7);
+        Parent = BorderLayer;
     });
 
     local MainContent = Library:Create('Frame', {
@@ -3658,6 +3876,11 @@ function Library:CreateWindow(...)
         Parent = BorderLayer;
     });
 
+    Library:Create('UICorner', {
+        CornerRadius = UDim.new(0, 6);
+        Parent = MainContent;
+    });
+
     Library:AddToRegistry(MainContent, {
         BackgroundColor3 = 'BackgroundColor';
     });
@@ -3667,7 +3890,7 @@ function Library:CreateWindow(...)
         BorderSizePixel = 0;
         Position = UDim2.new(0, 0, 0, 0);
         Size = UDim2.new(1, 0, 0, 2);
-        ZIndex = 4;
+        ZIndex = 6;
         Parent = MainContent;
     });
 
@@ -3675,12 +3898,102 @@ function Library:CreateWindow(...)
         BackgroundColor3 = 'AccentColor';
     });
 
+    local TopTitleBar = Library:Create('Frame', {
+        BackgroundTransparency = 1;
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, 0, 0, 2);
+        Size = UDim2.new(1, 0, 0, 22);
+        ZIndex = 5;
+        Active = true;
+        Parent = MainContent;
+    });
+
+    local WindowLogo = Library:Create('ImageLabel', {
+        BackgroundTransparency = 1;
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, 8, 0.5, 0);
+        AnchorPoint = Vector2.new(0, 0.5);
+        Size = UDim2.fromOffset(14, 14);
+        Image = '';
+        ScaleType = Enum.ScaleType.Fit;
+        ZIndex = 6;
+        Visible = false;
+        Parent = TopTitleBar;
+    });
+
+    local WindowTitle = Library:CreateLabel({
+        Position = UDim2.new(0, 8, 0, 0);
+        Size = UDim2.new(1, -16, 1, 0);
+        TextSize = 13;
+        RichText = true;
+        TextXAlignment = Enum.TextXAlignment.Left;
+        ZIndex = 6;
+        Parent = TopTitleBar;
+    });
+
+    local function FormatWindowTitle(title)
+        title = title or '';
+        local r = math.floor(Library.AccentColor.R * 255);
+        local g = math.floor(Library.AccentColor.G * 255);
+        local b = math.floor(Library.AccentColor.B * 255);
+        local accentHex = string.format('rgb(%d,%d,%d)', r, g, b);
+
+        if title:find('sense') and not title:find('<font') then
+            return title:gsub('game', '<font color="rgb(255,255,255)">game</font>')
+                        :gsub('sense', string.format('<font color="%s">sense</font>', accentHex))
+                        :gsub('%.pub', '<font color="rgb(255,255,255)">.pub</font>');
+        elseif title:find(' - ') and not title:find('<font') then
+            local p1, p2 = title:match('^(.-)(%s*-%s*.*)$');
+            if p1 and p2 then
+                return string.format('<font color="%s">%s</font><font color="rgb(255,255,255)">%s</font>', accentHex, p1, p2);
+            end;
+        end;
+        return title;
+    end;
+
+    function Window:SetWindowTitle(Title)
+        WindowTitle.Text = FormatWindowTitle(Title);
+    end;
+
+    function Window:SetLogo(url)
+        if url == false then
+            WindowLogo.Visible = false;
+            WindowLogo.Image = '';
+            WindowTitle.Position = UDim2.new(0, 8, 0, 0);
+            WindowTitle.Size = UDim2.new(1, -16, 1, 0);
+            return;
+        end;
+
+        url = (type(url) == 'string' and url) or Library.DefaultLogoUrl;
+        task.spawn(function()
+            local asset = Library:GetCustomAsset(url, 'gamesense_menu_logo.jpg');
+            if asset and asset ~= '' and WindowLogo then
+                WindowLogo.Image = asset;
+                WindowLogo.Visible = true;
+                WindowTitle.Position = UDim2.new(0, 26, 0, 0);
+                WindowTitle.Size = UDim2.new(1, -34, 1, 0);
+            end;
+        end);
+    end;
+
+    Window:SetWindowTitle(Config.Title or 'gamesense');
+
+    if Config.Logo ~= false then
+        Window:SetLogo(type(Config.Logo) == 'string' and Config.Logo or Library.DefaultLogoUrl);
+    end;
+
+    Library:MakeDraggable(Outer, Outer, 35);
+    Library:MakeDraggable(Outer, BorderLayer, 35);
+    Library:MakeDraggable(Outer, MainContent, 35);
+    Library:MakeDraggable(Outer, TopAccent, 35);
+    Library:MakeDraggable(Outer, TopTitleBar, 35);
+
     local SidebarOuter = Library:Create('Frame', {
         BackgroundColor3 = Color3.fromRGB(15, 15, 15);
         BorderColor3 = Library.OutlineColor;
         BorderMode = Enum.BorderMode.Inset;
-        Position = UDim2.new(0, 8, 0, 8);
-        Size = UDim2.new(0, 72, 1, -16);
+        Position = UDim2.new(0, 8, 0, 26);
+        Size = UDim2.new(0, 72, 1, -34);
         ZIndex = 3;
         Parent = MainContent;
     });
@@ -3725,8 +4038,8 @@ function Library:CreateWindow(...)
         BackgroundColor3 = Color3.fromRGB(16, 16, 16);
         BorderColor3 = Library.OutlineColor;
         BorderMode = Enum.BorderMode.Inset;
-        Position = UDim2.new(0, 88, 0, 8);
-        Size = UDim2.new(1, -96, 1, -16);
+        Position = UDim2.new(0, 88, 0, 26);
+        Size = UDim2.new(1, -96, 1, -34);
         ZIndex = 2;
         Parent = MainContent;
     });
@@ -3734,10 +4047,7 @@ function Library:CreateWindow(...)
         BorderColor3 = 'OutlineColor';
     });
 
-    local WindowLabel = { Text = Config.Title or '' };
-    function Window:SetWindowTitle(Title)
-        WindowLabel.Text = Title;
-    end;
+    Library:MakeDraggable(Outer, TabContainer, 35);
 
     function Window:AddTab(Name, Icon)
         local Tab = {
@@ -4255,39 +4565,71 @@ function Library:CreateWindow(...)
         BorderColor3 = 'AccentColorDark';
     });
 
-    -- déplaçable + tap pour ouvrir/fermer (pas de MouseButton1Click : évite le toggle après un drag)
+    -- déplaçable + tap pour ouvrir/fermer (tactile et souris)
     Library:GiveSignal(OpenButton.InputBegan:Connect(function(Input)
         if Input.UserInputType ~= Enum.UserInputType.MouseButton1
             and Input.UserInputType ~= Enum.UserInputType.Touch then
             return;
         end;
 
-        local StartX, StartY = Mouse.X, Mouse.Y;
-        local StartAbs = OpenButton.AbsolutePosition;
-        local Moved = false;
+        local startPos = Vector2.new(Input.Position.X, Input.Position.Y);
+        local startAbs = OpenButton.AbsolutePosition;
+        local moved = false;
+        local dragging = true;
+        local activeInput = Input;
 
-        while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-            local DX, DY = Mouse.X - StartX, Mouse.Y - StartY;
+        local moveConn
+        local endConn
 
-            if (math.abs(DX) > 6) or (math.abs(DY) > 6) then
-                Moved = true;
+        local function Disconnect()
+            dragging = false;
+            if moveConn then moveConn:Disconnect(); moveConn = nil; end;
+            if endConn then endConn:Disconnect(); endConn = nil; end;
+        end;
+
+        moveConn = InputService.InputChanged:Connect(function(moveInput)
+            if not dragging then return end;
+
+            local isMatch = (moveInput == activeInput)
+                or (activeInput.UserInputType == Enum.UserInputType.Touch and moveInput.UserInputType == Enum.UserInputType.Touch)
+                or (activeInput.UserInputType == Enum.UserInputType.MouseButton1 and moveInput.UserInputType == Enum.UserInputType.MouseMovement);
+
+            if isMatch and moveInput.Position then
+                local dx = moveInput.Position.X - startPos.X;
+                local dy = moveInput.Position.Y - startPos.Y;
+
+                if (math.abs(dx) > 6) or (math.abs(dy) > 6) then
+                    moved = true;
+                end;
+
+                local VP = GetViewport();
+                local W, H = OpenButton.AbsoluteSize.X, OpenButton.AbsoluteSize.Y;
+
+                OpenButton.AnchorPoint = Vector2.zero;
+                OpenButton.Position = UDim2.fromOffset(
+                    math.clamp(startAbs.X + dx, 6, math.max(6, VP.X - W - 6)),
+                    math.clamp(startAbs.Y + dy, 6, math.max(6, VP.Y - H - 6))
+                );
             end;
+        end);
 
-            local VP = GetViewport();
-            local W, H = OpenButton.AbsoluteSize.X, OpenButton.AbsoluteSize.Y;
+        endConn = InputService.InputEnded:Connect(function(endInput)
+            if endInput == activeInput
+                or (activeInput.UserInputType == Enum.UserInputType.MouseButton1 and endInput.UserInputType == Enum.UserInputType.MouseButton1)
+                or (activeInput.UserInputType == Enum.UserInputType.Touch and endInput.UserInputType == Enum.UserInputType.Touch) then
+                Disconnect();
+                if not moved then
+                    Library:Toggle();
+                end;
+            end;
+        end);
 
-            OpenButton.AnchorPoint = Vector2.zero;
-            OpenButton.Position = UDim2.fromOffset(
-                math.clamp(StartAbs.X + DX, 6, math.max(6, VP.X - W - 6)),
-                math.clamp(StartAbs.Y + DY, 6, math.max(6, VP.Y - H - 6))
-            );
-
-            RenderStepped:Wait();
-        end;
-
-        if (not Moved) then
-            Library:Toggle();
-        end;
+        activeInput.Changed:Connect(function()
+            if activeInput.UserInputState == Enum.UserInputState.End
+                or activeInput.UserInputState == Enum.UserInputState.Cancel then
+                Disconnect();
+            end;
+        end);
     end));
 
     if Config.AutoShow then task.spawn(Library.Toggle) end
