@@ -129,23 +129,35 @@ local Library = {
         Legit = 'rbxassetid://14695120237',
         AntiAim = 'rbxassetid://7992557358',
         ['Anti-Aim'] = 'rbxassetid://7992557358',
-        Visuals = 'rbxassetid://5881046614',
+        Visual = 'rbxassetid://127234874352422',
+        visual = 'rbxassetid://127234874352422',
+        Visuals = 'rbxassetid://127234874352422',
+        visuals = 'rbxassetid://127234874352422',
         Misc = 'rbxassetid://7059346373',
+        misc = 'rbxassetid://7059346373',
         Settings = 'rbxassetid://78388764182737',
+        settings = 'rbxassetid://78388764182737',
+        gear = 'rbxassetid://78388764182737',
+        wrench = 'rbxassetid://78388764182737',
+        ['UI Settings'] = 'rbxassetid://78388764182737',
         Configs = 'rbxassetid://78388764182737',
         Config = 'rbxassetid://78388764182737',
         Players = 'rbxassetid://15016878198',
         Profile = 'rbxassetid://15016878198',
         Default = 'rbxassetid://7059346373',
         crosshair = 'rbxassetid://83752373575368',
+        Crosshair = 'rbxassetid://83752373575368',
         Aimbot = 'rbxassetid://83752373575368',
-        eye = 'rbxassetid://83752373575368',
-        ESP = 'rbxassetid://83752373575368',
+        aimbot = 'rbxassetid://83752373575368',
+        eye = 'rbxassetid://85332511060401',
+        Eye = 'rbxassetid://85332511060401',
+        ESP = 'rbxassetid://85332511060401',
+        esp = 'rbxassetid://85332511060401',
         circle = 'rbxassetid://5881046614',
         FOV = 'rbxassetid://5881046614',
         maximize = 'rbxassetid://5881046614',
-        wrench = 'rbxassetid://78388764182737',
-        ['UI Settings'] = 'rbxassetid://78388764182737',
+        skin = 'rbxassetid://97652569554326',
+        shirt = 'rbxassetid://97652569554326',
     };
     ShowCustomCursor = false;
 };
@@ -4182,7 +4194,9 @@ function Library:CreateWindow(...)
             ResolvedIcon = Library.Icons[ResolvedIcon];
         end;
 
-        local isBottom = (Name:lower() == 'profile' or Name:lower() == 'players' or Icon == 'Profile' or Icon == 'Players' or #Window.Tabs == 5);
+        local lowerName = Name:lower();
+        local lowerIcon = type(Icon) == 'string' and Icon:lower() or '';
+        local isBottom = (lowerName == 'profile' or lowerName == 'players' or lowerName == 'settings' or lowerName == 'configs' or lowerName == 'ui settings' or lowerIcon == 'profile' or lowerIcon == 'players' or lowerIcon == 'settings' or lowerIcon == 'configs' or lowerIcon == 'wrench');
         local targetParent = isBottom and BottomTabArea or TopTabArea;
 
         local TabButton = Library:Create('ImageButton', {
