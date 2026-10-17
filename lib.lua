@@ -4257,6 +4257,18 @@ function Library:CreateWindow(...)
             Parent = TabFrame;
         });
 
+        local FullSide = Library:Create('ScrollingFrame', {
+            BackgroundTransparency = 1;
+            BorderSizePixel = 0;
+            Position = UDim2.new(0, 8, 0, 8);
+            Size = UDim2.new(1, -16, 1, -16);
+            CanvasSize = UDim2.new(0, 0, 0, 0);
+            ScrollBarThickness = 2;
+            ScrollBarImageColor3 = Library.OutlineColor;
+            ZIndex = 2;
+            Parent = TabFrame;
+        });
+
         Library:Create('UIListLayout', {
             Padding = UDim.new(0, 10);
             FillDirection = Enum.FillDirection.Vertical;
@@ -4273,7 +4285,15 @@ function Library:CreateWindow(...)
             Parent = RightSide;
         });
 
-        for _, Side in next, { LeftSide, RightSide } do
+        Library:Create('UIListLayout', {
+            Padding = UDim.new(0, 10);
+            FillDirection = Enum.FillDirection.Vertical;
+            SortOrder = Enum.SortOrder.LayoutOrder;
+            HorizontalAlignment = Enum.HorizontalAlignment.Center;
+            Parent = FullSide;
+        });
+
+        for _, Side in next, { LeftSide, RightSide, FullSide } do
             Side:WaitForChild('UIListLayout'):GetPropertyChangedSignal('AbsoluteContentSize'):Connect(function()
                 Side.CanvasSize = UDim2.fromOffset(0, Side.UIListLayout.AbsoluteContentSize.Y);
             end);
@@ -4301,15 +4321,20 @@ function Library:CreateWindow(...)
             local Groupbox = {};
 
             local isLeft = true;
+            local isFull = false;
             local boxName = 'Groupbox';
             if type(Info) == 'table' then
-                if Info.Side == 2 or Info.Side == 'Right' or Info.Side == 'right' then
+                if Info.Side == 'Full' or Info.Side == 'full' or Info.Side == 3 or Info.Full then
+                    isFull = true;
+                elseif Info.Side == 2 or Info.Side == 'Right' or Info.Side == 'right' then
                     isLeft = false;
                 end;
                 boxName = Info.Name or Info.Title or boxName;
             elseif type(Info) == 'string' then
                 boxName = Info;
             end;
+
+            local parentSide = isFull and FullSide or (isLeft and LeftSide or RightSide);
 
             local BoxOuter = Library:Create('Frame', {
                 BackgroundColor3 = Library.BackgroundColor;
@@ -4318,7 +4343,7 @@ function Library:CreateWindow(...)
                 Size = UDim2.new(1, 0, 0, 50);
                 ClipsDescendants = false;
                 ZIndex = 2;
-                Parent = isLeft and LeftSide or RightSide;
+                Parent = parentSide;
             });
 
             Library:AddToRegistry(BoxOuter, {
@@ -4334,7 +4359,7 @@ function Library:CreateWindow(...)
                 Size = UDim2.new(0, titleWidth, 0, 14);
                 Position = UDim2.new(0, 12, 0, -7);
                 TextSize = 13;
-                Text = Info.Name;
+                Text = boxName;
                 TextColor3 = Library.FontColor;
                 TextXAlignment = Enum.TextXAlignment.Center;
                 ZIndex = 5;
@@ -4370,7 +4395,12 @@ function Library:CreateWindow(...)
                     end;
                 end;
 
-                BoxOuter.Size = UDim2.new(1, 0, 0, 14 + Size + 10);
+                if isFull then
+                    local minH = (parentSide.AbsoluteSize.Y > 50) and (parentSide.AbsoluteSize.Y - 8) or 380;
+                    BoxOuter.Size = UDim2.new(1, 0, 0, math.max(minH, 14 + Size + 14));
+                else
+                    BoxOuter.Size = UDim2.new(1, 0, 0, 14 + Size + 10);
+                end;
             end;
 
             Groupbox.Container = Container;
@@ -4392,10 +4422,33 @@ function Library:CreateWindow(...)
             return Tab:AddGroupbox({ Side = 2; Name = Name; });
         end;
 
+        function Tab:AddFullGroupbox(Name)
+            return Tab:AddGroupbox({ Side = 'Full'; Name = Name; });
+        end;
+
         function Tab:AddTabbox(Info)
             local Tabbox = {
                 Tabs = {};
             };
+
+            local isFull = false;
+            local parentSide = LeftSide;
+            local tabboxName = 'Tabbox';
+            if type(Info) == 'table' then
+                if Info.Side == 'Full' or Info.Side == 'full' or Info.Side == 3 or Info.Full then
+                    isFull = true;
+                    parentSide = FullSide;
+                elseif Info.Side == 2 or Info.Side == 'Right' or Info.Side == 'right' then
+                    parentSide = RightSide;
+                else
+                    parentSide = LeftSide;
+                end;
+                tabboxName = Info.Name or tabboxName;
+            elseif type(Info) == 'string' then
+                tabboxName = Info;
+                isFull = true;
+                parentSide = FullSide;
+            end;
 
             local BoxOuter = Library:Create('Frame', {
                 BackgroundColor3 = Library.BackgroundColor;
@@ -4403,7 +4456,7 @@ function Library:CreateWindow(...)
                 BorderMode = Enum.BorderMode.Inset;
                 Size = UDim2.new(1, 0, 0, 0);
                 ZIndex = 2;
-                Parent = Info.Side == 1 and LeftSide or RightSide;
+                Parent = parentSide;
             });
 
             Library:AddToRegistry(BoxOuter, {
@@ -4414,7 +4467,6 @@ function Library:CreateWindow(...)
             local BoxInner = Library:Create('Frame', {
                 BackgroundColor3 = Library.BackgroundColor;
                 BorderColor3 = Color3.new(0, 0, 0);
-                -- BorderMode = Enum.BorderMode.Inset;
                 Size = UDim2.new(1, -2, 1, -2);
                 Position = UDim2.new(0, 1, 0, 1);
                 ZIndex = 4;
@@ -4425,24 +4477,30 @@ function Library:CreateWindow(...)
                 BackgroundColor3 = 'BackgroundColor';
             });
 
-            local Highlight = Library:Create('Frame', {
-                BackgroundColor3 = Library.AccentColor;
-                BorderSizePixel = 0;
-                Size = UDim2.new(1, 0, 0, 2);
-                ZIndex = 10;
-                Parent = BoxInner;
-            });
-
-            Library:AddToRegistry(Highlight, {
-                BackgroundColor3 = 'AccentColor';
-            });
-
             local TabboxButtons = Library:Create('Frame', {
-                BackgroundTransparency = 1;
-                Position = UDim2.new(0, 0, 0, 1);
-                Size = UDim2.new(1, 0, 0, 18);
+                BackgroundColor3 = Library.MainColor;
+                BorderSizePixel = 0;
+                Position = UDim2.new(0, 0, 0, 0);
+                Size = UDim2.new(1, 0, 0, 32);
                 ZIndex = 5;
                 Parent = BoxInner;
+            });
+
+            Library:AddToRegistry(TabboxButtons, {
+                BackgroundColor3 = 'MainColor';
+            });
+
+            local TabboxDivider = Library:Create('Frame', {
+                BackgroundColor3 = Library.OutlineColor;
+                BorderSizePixel = 0;
+                Position = UDim2.new(0, 0, 0, 32);
+                Size = UDim2.new(1, 0, 0, 1);
+                ZIndex = 6;
+                Parent = BoxInner;
+            });
+
+            Library:AddToRegistry(TabboxDivider, {
+                BackgroundColor3 = 'OutlineColor';
             });
 
             Library:Create('UIListLayout', {
@@ -4457,9 +4515,9 @@ function Library:CreateWindow(...)
 
                 local Button = Library:Create('Frame', {
                     BackgroundColor3 = Library.MainColor;
-                    BorderColor3 = Color3.new(0, 0, 0);
+                    BorderSizePixel = 0;
                     Size = UDim2.new(0.5, 0, 1, 0);
-                    ZIndex = 6;
+                    ZIndex = 7;
                     Parent = TabboxButtons;
                 });
 
@@ -4468,32 +4526,33 @@ function Library:CreateWindow(...)
                 });
 
                 local ButtonLabel = Library:CreateLabel({
-                    Size = UDim2.new(1, 0, 1, 0);
+                    Size = UDim2.new(1, 0, 1, -2);
                     TextSize = 14;
                     Text = Name;
+                    TextColor3 = Color3.fromRGB(150, 150, 150);
                     TextXAlignment = Enum.TextXAlignment.Center;
-                    ZIndex = 7;
+                    ZIndex = 8;
                     Parent = Button;
                 });
 
-                local Block = Library:Create('Frame', {
-                    BackgroundColor3 = Library.BackgroundColor;
+                local ActiveIndicator = Library:Create('Frame', {
+                    BackgroundColor3 = Library.AccentColor;
                     BorderSizePixel = 0;
-                    Position = UDim2.new(0, 0, 1, 0);
-                    Size = UDim2.new(1, 0, 0, 1);
+                    Position = UDim2.new(0, 0, 1, -2);
+                    Size = UDim2.new(1, 0, 0, 2);
                     Visible = false;
                     ZIndex = 9;
                     Parent = Button;
                 });
 
-                Library:AddToRegistry(Block, {
-                    BackgroundColor3 = 'BackgroundColor';
+                Library:AddToRegistry(ActiveIndicator, {
+                    BackgroundColor3 = 'AccentColor';
                 });
 
                 local Container = Library:Create('Frame', {
                     BackgroundTransparency = 1;
-                    Position = UDim2.new(0, 4, 0, 20);
-                    Size = UDim2.new(1, -4, 1, -20);
+                    Position = UDim2.new(0, 6, 0, 38);
+                    Size = UDim2.new(1, -12, 1, -44);
                     ZIndex = 1;
                     Visible = false;
                     Parent = BoxInner;
@@ -4502,6 +4561,7 @@ function Library:CreateWindow(...)
                 Library:Create('UIListLayout', {
                     FillDirection = Enum.FillDirection.Vertical;
                     SortOrder = Enum.SortOrder.LayoutOrder;
+                    Padding = UDim.new(0, 4);
                     Parent = Container;
                 });
 
@@ -4511,9 +4571,10 @@ function Library:CreateWindow(...)
                     end;
 
                     Container.Visible = true;
-                    Block.Visible = true;
+                    ActiveIndicator.Visible = true;
 
                     Button.BackgroundColor3 = Library.BackgroundColor;
+                    ButtonLabel.TextColor3 = Color3.fromRGB(255, 255, 255);
                     Library.RegistryMap[Button].Properties.BackgroundColor3 = 'BackgroundColor';
 
                     Tab:Resize();
@@ -4521,9 +4582,10 @@ function Library:CreateWindow(...)
 
                 function Tab:Hide()
                     Container.Visible = false;
-                    Block.Visible = false;
+                    ActiveIndicator.Visible = false;
 
                     Button.BackgroundColor3 = Library.MainColor;
+                    ButtonLabel.TextColor3 = Color3.fromRGB(150, 150, 150);
                     Library.RegistryMap[Button].Properties.BackgroundColor3 = 'MainColor';
                 end;
 
@@ -4552,8 +4614,27 @@ function Library:CreateWindow(...)
                         end;
                     end;
 
-                    BoxOuter.Size = UDim2.new(1, 0, 0, 20 + Size + 2 + 2);
+                    if isFull then
+                        local minH = (parentSide.AbsoluteSize.Y > 50) and (parentSide.AbsoluteSize.Y - 8) or 380;
+                        BoxOuter.Size = UDim2.new(1, 0, 0, math.max(minH, 40 + Size + 14));
+                    else
+                        BoxOuter.Size = UDim2.new(1, 0, 0, 40 + Size + 10);
+                    end;
                 end;
+
+                Button.MouseEnter:Connect(function()
+                    if not Container.Visible then
+                        Button.BackgroundColor3 = Color3.fromRGB(32, 34, 42);
+                        ButtonLabel.TextColor3 = Color3.fromRGB(210, 210, 210);
+                    end;
+                end);
+
+                Button.MouseLeave:Connect(function()
+                    if not Container.Visible then
+                        Button.BackgroundColor3 = Library.MainColor;
+                        ButtonLabel.TextColor3 = Color3.fromRGB(150, 150, 150);
+                    end;
+                end);
 
                 Button.InputBegan:Connect(function(Input)
                     if (Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch) and not Library:MouseIsOverOpenedFrame() then
@@ -4578,7 +4659,7 @@ function Library:CreateWindow(...)
                 return Tab;
             end;
 
-            Tab.Tabboxes[Info.Name or ''] = Tabbox;
+            Tab.Tabboxes[tabboxName] = Tabbox;
 
             return Tabbox;
         end;
@@ -4589,6 +4670,10 @@ function Library:CreateWindow(...)
 
         function Tab:AddRightTabbox(Name)
             return Tab:AddTabbox({ Name = Name, Side = 2; });
+        end;
+
+        function Tab:AddFullTabbox(Name)
+            return Tab:AddTabbox({ Name = Name, Side = 'Full'; });
         end;
 
         TabButton.InputBegan:Connect(function(Input)
