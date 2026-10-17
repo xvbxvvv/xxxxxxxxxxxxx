@@ -3905,8 +3905,10 @@ function Library:CreateWindow(...)
 
     local Outer = Library:Create('Frame', {
         AnchorPoint = Config.AnchorPoint,
-        BackgroundColor3 = Color3.fromRGB(12, 12, 12);
+        BackgroundColor3 = Color3.fromRGB(8, 10, 16);
+        BackgroundTransparency = 0.18;
         BorderColor3 = Color3.new(0, 0, 0);
+        BorderSizePixel = 0;
         Position = Config.Position,
         Size = GetFittedSize(),
         Visible = false,
@@ -3915,9 +3917,45 @@ function Library:CreateWindow(...)
     });
 
     Library:Create('UICorner', {
-        CornerRadius = UDim.new(0, 8);
+        CornerRadius = UDim.new(0, 12);
         Parent = Outer;
     });
+
+    -- ── Liquid Glass: BlurEffect behind menu ──
+    local GlassBlur = Library:Create('BlurEffect', {
+        Size = 18;
+        Parent = game:GetService('Lighting');
+    });
+
+    -- ── Liquid Glass: outer shimmer glow border ──
+    local GlowBorder = Library:Create('ImageLabel', {
+        BackgroundTransparency = 1;
+        BorderSizePixel = 0;
+        AnchorPoint = Vector2.new(0.5, 0.5);
+        Position = UDim2.new(0.5, 0, 0.5, 0);
+        Size = UDim2.new(1, 18, 1, 18);
+        Image = 'rbxassetid://5028857084';
+        ImageColor3 = Color3.fromRGB(255, 255, 255);
+        ImageTransparency = 0.72;
+        ScaleType = Enum.ScaleType.Slice;
+        SliceCenter = Rect.new(12, 12, 12, 12);
+        ZIndex = 0;
+        Parent = Outer;
+    });
+
+    -- Animate glow shimmer
+    task.spawn(function()
+        local t = 0;
+        while GlowBorder and GlowBorder.Parent do
+            t = t + 0.016;
+            local pulse = 0.62 + math.sin(t * 1.4) * 0.10;
+            if GlowBorder and GlowBorder.Parent then
+                GlowBorder.ImageTransparency = pulse;
+                GlowBorder.ImageColor3 = Color3.fromHSV((t * 0.04) % 1, 0.25, 1);
+            end;
+            task.wait(0.016);
+        end;
+    end);
 
     if AutoSize then
         local function RefreshWindowSize()
@@ -3954,7 +3992,8 @@ function Library:CreateWindow(...)
     end;
 
     local BorderLayer = Library:Create('Frame', {
-        BackgroundColor3 = Color3.fromRGB(48, 48, 48);
+        BackgroundColor3 = Color3.fromRGB(180, 200, 255);
+        BackgroundTransparency = 0.82;
         BorderSizePixel = 0;
         Position = UDim2.new(0, 1, 0, 1);
         Size = UDim2.new(1, -2, 1, -2);
@@ -3963,12 +4002,48 @@ function Library:CreateWindow(...)
     });
 
     Library:Create('UICorner', {
-        CornerRadius = UDim.new(0, 7);
+        CornerRadius = UDim.new(0, 11);
         Parent = BorderLayer;
     });
 
+    -- ── Liquid Glass: top shimmer highlight line ──
+    local GlassTopShimmer = Library:Create('Frame', {
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+        BackgroundTransparency = 0.55;
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, 0, 0, 0);
+        Size = UDim2.new(1, 0, 0, 1);
+        ZIndex = 10;
+        Parent = BorderLayer;
+    });
+    Library:Create('UICorner', { CornerRadius = UDim.new(1, 0); Parent = GlassTopShimmer; });
+
+    -- ── Liquid Glass: frosted inner gradient overlay ──
+    local FrostOverlay = Library:Create('Frame', {
+        BackgroundColor3 = Color3.fromRGB(200, 215, 255);
+        BackgroundTransparency = 0.90;
+        BorderSizePixel = 0;
+        Size = UDim2.new(1, 0, 0.45, 0);
+        ZIndex = 1;
+        Parent = BorderLayer;
+    });
+    Library:Create('UICorner', { CornerRadius = UDim.new(0, 11); Parent = FrostOverlay; });
+    Library:Create('UIGradient', {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255));
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 140, 200));
+        });
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.0);
+            NumberSequenceKeypoint.new(1, 1.0);
+        });
+        Rotation = 90;
+        Parent = FrostOverlay;
+    });
+
     local MainContent = Library:Create('Frame', {
-        BackgroundColor3 = Library.BackgroundColor;
+        BackgroundColor3 = Color3.fromRGB(8, 10, 18);
+        BackgroundTransparency = 0.28;
         BorderSizePixel = 0;
         Position = UDim2.new(0, 1, 0, 1);
         Size = UDim2.new(1, -2, 1, -2);
@@ -3977,7 +4052,7 @@ function Library:CreateWindow(...)
     });
 
     Library:Create('UICorner', {
-        CornerRadius = UDim.new(0, 6);
+        CornerRadius = UDim.new(0, 10);
         Parent = MainContent;
     });
 
@@ -3987,12 +4062,50 @@ function Library:CreateWindow(...)
 
     local TopAccent = Library:Create('Frame', {
         BackgroundColor3 = Library.AccentColor;
+        BackgroundTransparency = 0.0;
         BorderSizePixel = 0;
         Position = UDim2.new(0, 0, 0, 0);
-        Size = UDim2.new(1, 0, 0, 2);
+        Size = UDim2.new(1, 0, 0, 3);
         ZIndex = 6;
         Parent = MainContent;
     });
+
+    Library:Create('UICorner', {
+        CornerRadius = UDim.new(1, 0);
+        Parent = TopAccent;
+    });
+
+    -- Animated liquid shimmer on accent bar
+    local AccentShimmer = Library:Create('Frame', {
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+        BackgroundTransparency = 0.60;
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, 0, 0, 0);
+        Size = UDim2.new(0.35, 0, 1, 0);
+        ZIndex = 7;
+        Parent = TopAccent;
+    });
+    Library:Create('UICorner', { CornerRadius = UDim.new(1, 0); Parent = AccentShimmer; });
+    Library:Create('UIGradient', {
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1);
+            NumberSequenceKeypoint.new(0.5, 0);
+            NumberSequenceKeypoint.new(1, 1);
+        });
+        Rotation = 0;
+        Parent = AccentShimmer;
+    });
+    task.spawn(function()
+        local at = 0;
+        while AccentShimmer and AccentShimmer.Parent do
+            at = at + 0.008;
+            local x = (at % 1);
+            if AccentShimmer and AccentShimmer.Parent then
+                AccentShimmer.Position = UDim2.new(x - 0.35, 0, 0, 0);
+            end;
+            task.wait(0.016);
+        end;
+    end);
 
     Library:AddToRegistry(TopAccent, {
         BackgroundColor3 = 'AccentColor';
@@ -4089,13 +4202,29 @@ function Library:CreateWindow(...)
     Library:MakeDraggable(Outer, TopTitleBar, 35);
 
     local SidebarOuter = Library:Create('Frame', {
-        BackgroundColor3 = Color3.fromRGB(15, 15, 15);
-        BorderColor3 = Library.OutlineColor;
-        BorderMode = Enum.BorderMode.Inset;
+        BackgroundColor3 = Color3.fromRGB(20, 22, 35);
+        BackgroundTransparency = 0.45;
+        BorderSizePixel = 0;
         Position = UDim2.new(0, 8, 0, 26);
         Size = UDim2.new(0, 72, 1, -34);
         ZIndex = 3;
         Parent = MainContent;
+    });
+
+    Library:Create('UICorner', {
+        CornerRadius = UDim.new(0, 10);
+        Parent = SidebarOuter;
+    });
+
+    -- ── Glass sidebar: left shimmer edge ──
+    local SidebarShimmer = Library:Create('Frame', {
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+        BackgroundTransparency = 0.70;
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, 0, 0, 0);
+        Size = UDim2.new(0, 1, 1, 0);
+        ZIndex = 4;
+        Parent = SidebarOuter;
     });
 
     Library:AddToRegistry(SidebarOuter, {
@@ -4135,14 +4264,32 @@ function Library:CreateWindow(...)
     });
 
     local TabContainer = Library:Create('Frame', {
-        BackgroundColor3 = Color3.fromRGB(16, 16, 16);
-        BorderColor3 = Library.OutlineColor;
-        BorderMode = Enum.BorderMode.Inset;
+        BackgroundColor3 = Color3.fromRGB(10, 12, 22);
+        BackgroundTransparency = 0.38;
+        BorderSizePixel = 0;
         Position = UDim2.new(0, 88, 0, 26);
         Size = UDim2.new(1, -96, 1, -34);
         ZIndex = 2;
         Parent = MainContent;
     });
+
+    Library:Create('UICorner', {
+        CornerRadius = UDim.new(0, 8);
+        Parent = TabContainer;
+    });
+
+    -- ── Glass tab container: top shimmer highlight ──
+    local TabShimmer = Library:Create('Frame', {
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+        BackgroundTransparency = 0.78;
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, 0, 0, 0);
+        Size = UDim2.new(1, 0, 0, 1);
+        ZIndex = 3;
+        Parent = TabContainer;
+    });
+    Library:Create('UICorner', { CornerRadius = UDim.new(1, 0); Parent = TabShimmer; });
+
     Library:AddToRegistry(TabContainer, {
         BorderColor3 = 'OutlineColor';
     });
@@ -4282,14 +4429,39 @@ function Library:CreateWindow(...)
             end;
 
             local BoxOuter = Library:Create('Frame', {
-                BackgroundColor3 = Library.BackgroundColor;
-                BorderColor3 = Library.OutlineColor;
-                BorderMode = Enum.BorderMode.Inset;
+                BackgroundColor3 = Color3.fromRGB(15, 18, 32);
+                BackgroundTransparency = 0.52;
+                BorderSizePixel = 0;
                 Size = UDim2.new(1, 0, 0, 50);
                 ClipsDescendants = false;
                 ZIndex = 2;
                 Parent = isLeft and LeftSide or RightSide;
             });
+
+            Library:Create('UICorner', {
+                CornerRadius = UDim.new(0, 8);
+                Parent = BoxOuter;
+            });
+
+            -- Glass groupbox: glowing stroke border
+            Library:Create('UIStroke', {
+                Color = Color3.fromRGB(120, 140, 255);
+                Transparency = 0.70;
+                Thickness = 1;
+                Parent = BoxOuter;
+            });
+
+            -- Glass groupbox: top shimmer highlight
+            local BoxShimmer = Library:Create('Frame', {
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+                BackgroundTransparency = 0.78;
+                BorderSizePixel = 0;
+                Position = UDim2.new(0, 0, 0, 0);
+                Size = UDim2.new(1, 0, 0, 1);
+                ZIndex = 3;
+                Parent = BoxOuter;
+            });
+            Library:Create('UICorner', { CornerRadius = UDim.new(1, 0); Parent = BoxShimmer; });
 
             Library:AddToRegistry(BoxOuter, {
                 BackgroundColor3 = 'BackgroundColor';
@@ -4298,8 +4470,8 @@ function Library:CreateWindow(...)
 
             local titleWidth = Library:GetTextBounds(boxName, Library.Font, 13) + 10;
             local GroupboxLabel = Library:CreateLabel({
-                BackgroundColor3 = Library.BackgroundColor;
-                BackgroundTransparency = 0;
+                BackgroundColor3 = Color3.fromRGB(15, 18, 32);
+                BackgroundTransparency = 0.52;
                 BorderSizePixel = 0;
                 Size = UDim2.new(0, titleWidth, 0, 14);
                 Position = UDim2.new(0, 12, 0, -7);
@@ -4310,6 +4482,7 @@ function Library:CreateWindow(...)
                 ZIndex = 5;
                 Parent = BoxOuter;
             });
+            Library:Create('UICorner', { CornerRadius = UDim.new(0, 4); Parent = GroupboxLabel; });
 
             Library:AddToRegistry(GroupboxLabel, {
                 BackgroundColor3 = 'BackgroundColor';
