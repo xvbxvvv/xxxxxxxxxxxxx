@@ -6129,24 +6129,17 @@ function Library:CreateWindow(...)
             end;
         end;
 
-        local bottomH = countBottom > 0 and (countBottom * 42 + math.max(0, countBottom - 1) * 6 + 6) or 0;
-        BottomTabArea.Size = UDim2.new(1, 0, 0, bottomH);
-        BottomTabArea.Position = UDim2.new(0, 0, 1, -(badgeH + bottomH + 4));
-
-        local totalReserved = badgeH + bottomH + 18;
-
-        -- Calcule la hauteur réelle du contenu (tabs dans TopTabArea)
-        -- pour éviter le grand espace vide quand il y a peu d'onglets.
-        local topContentH = (TopTabLayout and TopTabLayout.AbsoluteContentSize.Y) or 0;
-        local sideH = SidebarOuter.AbsoluteSize.Y;
-        local maxTopH = math.max(50, sideH - totalReserved - 10);
-        -- Hauteur = contenu + padding, jamais plus que l'espace dispo
-        local topH = math.min(topContentH + 20, maxTopH);
-        -- Si pas encore de taille absolue (premier frame), fallback relatif
-        if sideH <= 10 then
-            TopTabArea.Size = UDim2.new(1, 0, 1, -totalReserved);
+        if countBottom == 0 then
+            BottomTabArea.Visible = false;
+            BottomTabArea.Size = UDim2.new(1, 0, 0, 0);
+            TopTabArea.Size = UDim2.new(1, 0, 1, -(badgeH + 16));
         else
-            TopTabArea.Size = UDim2.new(1, 0, 0, math.max(topH, 50));
+            BottomTabArea.Visible = true;
+            local bottomH = countBottom * 42 + math.max(0, countBottom - 1) * 6 + 6;
+            BottomTabArea.Size = UDim2.new(1, 0, 0, bottomH);
+            BottomTabArea.Position = UDim2.new(0, 0, 1, -(badgeH + bottomH + 4));
+            local totalReserved = badgeH + bottomH + 18;
+            TopTabArea.Size = UDim2.new(1, 0, 1, -totalReserved);
         end;
     end;
 
@@ -6340,14 +6333,13 @@ function Library:CreateWindow(...)
 
         local lowerName = Name:lower();
         local lowerIcon = type(Icon) == 'string' and Icon:lower() or '';
-        local isBottom = false
+        local isBottom = false;
         if type(TabConfig) == 'table' and (TabConfig.Position == 'Bottom' or TabConfig.Bottom == true or TabConfig.Side == 'Bottom') then
-            isBottom = true
-        else
-            isBottom = (lowerName == 'settings' or lowerName == 'configs' or lowerName == 'config' or lowerName == 'ui settings' or lowerIcon == 'settings');
-        end
+            isBottom = true;
+        end;
         local targetParent = isBottom and BottomTabArea or TopTabArea;
 
+        local currentTabCount = #(Window.TabsList or {}) + 1;
         local TabButton = Library:Create('ImageButton', {
             BackgroundColor3 = Color3.fromRGB(24, 24, 28);
             BackgroundTransparency = 1;
@@ -6356,6 +6348,7 @@ function Library:CreateWindow(...)
             Image = ResolvedIcon;
             ImageColor3 = Color3.fromRGB(120, 120, 130);
             ScaleType = Enum.ScaleType.Fit;
+            LayoutOrder = currentTabCount;
             ZIndex = 5;
             Parent = targetParent;
         });
@@ -7323,10 +7316,11 @@ function Library:CreateWindow(...)
         local TabName = SettingsConfig.Title or SettingsConfig.Name or 'Settings';
         local TabIcon = SettingsConfig.Icon or 'settings';
 
+        local isBottom = SettingsConfig.Position == 'Bottom' or SettingsConfig.Bottom == true or Config.SettingsBottom == true;
         local SettingsTab = Window:AddTab({
             Name = TabName,
             Icon = TabIcon,
-            Position = 'Bottom',
+            Position = isBottom and 'Bottom' or 'Top',
         });
         Window.SettingsTab = SettingsTab;
 
