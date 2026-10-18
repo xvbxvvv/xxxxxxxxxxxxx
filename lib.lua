@@ -1643,6 +1643,8 @@ do
                 Obj.Func = Props.Func
                 Obj.DoubleClick = Props.DoubleClick
                 Obj.Tooltip = Props.Tooltip
+                Obj.Color = Props.Color or Props.BackgroundColor3 or (Props.Primary and Color3.fromRGB(110, 230, 110))
+                Obj.TextColor = Props.TextColor or Props.TextColor3 or (Props.Primary and Color3.fromRGB(18, 18, 18))
             else
                 Obj.Text = select(1, ...)
                 Obj.Func = select(2, ...)
@@ -1670,7 +1672,7 @@ do
             });
 
             local Inner = Library:Create('Frame', {
-                BackgroundColor3 = Library.MainColor;
+                BackgroundColor3 = Button.Color or Library.MainColor;
                 BorderColor3 = Library.OutlineColor;
                 BorderMode = Enum.BorderMode.Inset;
                 Size = UDim2.new(1, 0, 1, 0);
@@ -1687,6 +1689,7 @@ do
                 Size = UDim2.new(1, 0, 1, 0);
                 TextSize = 13;
                 Text = Button.Text;
+                TextColor3 = Button.TextColor or Library.FontColor;
                 ZIndex = 6;
                 Parent = Inner;
             });
@@ -1711,14 +1714,18 @@ do
                 BorderColor3 = 'Black';
             });
 
-            Library:AddToRegistry(Inner, {
-                BackgroundColor3 = 'MainColor';
-                BorderColor3 = 'OutlineColor';
-            });
+            if not Button.Color then
+                Library:AddToRegistry(Inner, {
+                    BackgroundColor3 = 'MainColor';
+                    BorderColor3 = 'OutlineColor';
+                });
+            end;
 
-            Library:AddToRegistry(Label, {
-                TextColor3 = 'FontColor';
-            });
+            if not Button.TextColor then
+                Library:AddToRegistry(Label, {
+                    TextColor3 = 'FontColor';
+                });
+            end;
 
             Library:OnHighlight(Outer, Inner,
                 { BorderColor3 = 'AccentColor' },
@@ -3467,6 +3474,345 @@ do
         return Stats;
     end;
 
+    function Funcs:AddImage(Idx, Info)
+        if type(Idx) == 'table' and Info == nil then
+            Info = Idx;
+            Idx = Info.Idx or ('Image_' .. tostring(math.random(10000, 99999)));
+        end;
+        Info = Info or {};
+        local Groupbox = self;
+        local Container = Groupbox.Container;
+
+        local CardHeight = Info.Height or 135;
+        local HasTitle = (Info.Title ~= nil and Info.Title ~= '');
+
+        local CardOuter = Library:Create('Frame', {
+            BackgroundColor3 = Info.BackgroundColor3 or Color3.fromRGB(18, 18, 22);
+            BorderSizePixel = 0;
+            Size = UDim2.new(1, -4, 0, CardHeight);
+            ZIndex = 5;
+            Parent = Container;
+        });
+
+        Library:Create('UICorner', {
+            CornerRadius = UDim.new(0, Info.Corner or 6);
+            Parent = CardOuter;
+        });
+
+        Library:Create('UIStroke', {
+            Color = Info.StrokeColor or Color3.fromRGB(40, 40, 48);
+            Thickness = 1;
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+            Parent = CardOuter;
+        });
+
+        local TitleLabel;
+        if HasTitle then
+            TitleLabel = Library:CreateLabel({
+                Size = UDim2.new(1, -16, 0, 16);
+                Position = UDim2.new(0, 8, 0, 6);
+                TextSize = Info.TitleSize or 12;
+                TextColor3 = Info.TitleColor or Color3.fromRGB(220, 220, 230);
+                Text = Info.Title;
+                TextXAlignment = Enum.TextXAlignment.Left;
+                ZIndex = 6;
+                Parent = CardOuter;
+            });
+        end;
+
+        local ImageBox = Library:Create('ImageLabel', {
+            BackgroundTransparency = 1;
+            Position = HasTitle and UDim2.new(0, 8, 0, 24) or UDim2.new(0, 8, 0, 8);
+            Size = HasTitle and UDim2.new(1, -16, 1, -30) or UDim2.new(1, -16, 1, -16);
+            Image = Info.Image or '';
+            ScaleType = Info.ScaleType or Enum.ScaleType.Fit;
+            ImageColor3 = Info.ImageColor3 or Color3.new(1, 1, 1);
+            ZIndex = 6;
+            Parent = CardOuter;
+        });
+
+        if Info.AspectRatio then
+            Library:Create('UIAspectRatioConstraint', {
+                AspectRatio = Info.AspectRatio;
+                Parent = ImageBox;
+            });
+        end;
+
+        local ImageObj = {
+            Outer = CardOuter;
+            Card = CardOuter;
+            ImageLabel = ImageBox;
+            TitleLabel = TitleLabel;
+            Height = CardHeight;
+        };
+
+        function ImageObj:SetImage(newImg)
+            if type(newImg) == 'number' then
+                newImg = 'rbxassetid://' .. tostring(newImg);
+            end;
+            ImageBox.Image = newImg or '';
+        end;
+
+        function ImageObj:SetTitle(newTitle)
+            if TitleLabel then
+                TitleLabel.Text = newTitle or '';
+            end;
+        end;
+
+        function ImageObj:SetVisible(vis)
+            CardOuter.Visible = vis;
+            Groupbox:Resize();
+        end;
+
+        function ImageObj:SetHeight(newH)
+            CardOuter.Size = UDim2.new(1, -4, 0, newH);
+            Groupbox:Resize();
+        end;
+
+        function ImageObj:SetScaleType(scaleType)
+            ImageBox.ScaleType = scaleType;
+        end;
+
+        Groupbox:AddBlank(Info.BlankSize or 5);
+        Groupbox:Resize();
+
+        Options[Idx] = ImageObj;
+        return ImageObj;
+    end;
+
+    function Funcs:AddImageRow(Idx, Info)
+        if type(Idx) == 'table' and Info == nil then
+            Info = Idx;
+            Idx = Info.Idx or ('ImageRow_' .. tostring(math.random(10000, 99999)));
+        end;
+        Info = Info or {};
+        local Groupbox = self;
+        local Container = Groupbox.Container;
+
+        local RowHeight = Info.Height or 90;
+        local Items = Info.Items or {};
+        local Count = #Items;
+        if Count == 0 then Count = 2 end;
+
+        local RowFrame = Library:Create('Frame', {
+            BackgroundTransparency = 1;
+            Size = UDim2.new(1, -4, 0, RowHeight);
+            ZIndex = 5;
+            Parent = Container;
+        });
+
+        Library:Create('UIListLayout', {
+            FillDirection = Enum.FillDirection.Horizontal;
+            SortOrder = Enum.SortOrder.LayoutOrder;
+            Padding = UDim.new(0, Info.Padding or 6);
+            Parent = RowFrame;
+        });
+
+        local SubCards = {};
+        local itemWidthScale = 1 / Count;
+        local totalPadding = (Count - 1) * (Info.Padding or 6);
+        local itemWidthOffset = -math.floor(totalPadding / Count);
+
+        for i, itemData in ipairs(Items) do
+            local itemKey = itemData.Key or itemData.Title or tostring(i);
+            local HasSubTitle = (itemData.Title ~= nil and itemData.Title ~= '');
+
+            local SubCard = Library:Create('Frame', {
+                BackgroundColor3 = itemData.BackgroundColor3 or Color3.fromRGB(18, 18, 22);
+                BorderSizePixel = 0;
+                Size = UDim2.new(itemWidthScale, itemWidthOffset, 1, 0);
+                LayoutOrder = i;
+                ZIndex = 6;
+                Parent = RowFrame;
+            });
+
+            Library:Create('UICorner', {
+                CornerRadius = UDim.new(0, itemData.Corner or 6);
+                Parent = SubCard;
+            });
+
+            Library:Create('UIStroke', {
+                Color = itemData.StrokeColor or Color3.fromRGB(40, 40, 48);
+                Thickness = 1;
+                ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+                Parent = SubCard;
+            });
+
+            local SubTitle;
+            if HasSubTitle then
+                SubTitle = Library:CreateLabel({
+                    Size = UDim2.new(1, -12, 0, 14);
+                    Position = UDim2.new(0, 6, 0, 5);
+                    TextSize = 11;
+                    TextColor3 = Color3.fromRGB(190, 190, 200);
+                    Text = itemData.Title;
+                    TextXAlignment = Enum.TextXAlignment.Left;
+                    ZIndex = 7;
+                    Parent = SubCard;
+                });
+            end;
+
+            local SubImg = Library:Create('ImageLabel', {
+                BackgroundTransparency = 1;
+                Position = HasSubTitle and UDim2.new(0, 6, 0, 20) or UDim2.new(0, 6, 0, 6);
+                Size = HasSubTitle and UDim2.new(1, -12, 1, -24) or UDim2.new(1, -12, 1, -12);
+                Image = itemData.Image or '';
+                ScaleType = itemData.ScaleType or Enum.ScaleType.Fit;
+                ImageColor3 = itemData.ImageColor3 or Color3.new(1, 1, 1);
+                ZIndex = 7;
+                Parent = SubCard;
+            });
+
+            local cardRef = {
+                Card = SubCard;
+                TitleLabel = SubTitle;
+                ImageLabel = SubImg;
+            };
+
+            function cardRef:SetImage(newImg)
+                if type(newImg) == 'number' then
+                    newImg = 'rbxassetid://' .. tostring(newImg);
+                end;
+                SubImg.Image = newImg or '';
+            end;
+
+            function cardRef:SetTitle(newTitle)
+                if SubTitle then
+                    SubTitle.Text = newTitle or '';
+                end;
+            end;
+
+            SubCards[itemKey] = cardRef;
+            SubCards[i] = cardRef;
+        end;
+
+        local RowObj = {
+            Outer = RowFrame;
+            Cards = SubCards;
+            Height = RowHeight;
+        };
+
+        function RowObj:SetImage(key, img)
+            if SubCards[key] then
+                SubCards[key]:SetImage(img);
+            end;
+        end;
+
+        function RowObj:SetTitle(key, title)
+            if SubCards[key] then
+                SubCards[key]:SetTitle(title);
+            end;
+        end;
+
+        function RowObj:SetVisible(vis)
+            RowFrame.Visible = vis;
+            Groupbox:Resize();
+        end;
+
+        Groupbox:AddBlank(Info.BlankSize or 5);
+        Groupbox:Resize();
+
+        Options[Idx] = RowObj;
+        return RowObj;
+    end;
+
+    function Funcs:AddRender(Idx, Info)
+        if type(Idx) == 'table' and Info == nil then
+            Info = Idx;
+            Idx = Info.Idx or ('Render_' .. tostring(math.random(10000, 99999)));
+        end;
+        Info = Info or {};
+        local Groupbox = self;
+
+        local MainCard = Groupbox:AddImage(Idx .. '_Main', {
+            Title = Info.WeaponTitle or 'AKEY-47';
+            Image = Info.WeaponImage or '';
+            Height = Info.WeaponHeight or 135;
+            Corner = 6;
+        });
+
+        local DetailFields = Info.Details or {
+            { Key = 'Weapon', Label = 'Weapon', Value = 'Assault Rifle' },
+            { Key = 'Skin', Label = 'Skin', Value = 'AKEY-47' },
+            { Key = 'Wrap', Label = 'Wrap', Value = '2025 Wrapping' },
+            { Key = 'Charm', Label = 'Charm', Value = 'WE1RD' },
+            { Key = 'Finisher', Label = 'Finisher', Value = 'Whirlpool' },
+        };
+
+        local Labels = {};
+        for _, item in ipairs(DetailFields) do
+            local lbl = Groupbox:AddLabel(item.Label .. ': ' .. tostring(item.Value));
+            Labels[item.Key] = {
+                LabelObj = lbl;
+                Prefix = item.Label;
+            };
+        end;
+
+        local Row = Groupbox:AddImageRow(Idx .. '_Row', {
+            Height = 85;
+            Items = {
+                { Key = 'Wrap', Title = Info.WrapTitle or 'Wrap', Image = Info.WrapImage or '' },
+                { Key = 'Charm', Title = Info.CharmTitle or 'Charm', Image = Info.CharmImage or '' },
+            };
+        });
+
+        local FinisherCard = Groupbox:AddImage(Idx .. '_Finisher', {
+            Title = Info.FinisherTitle or 'Finisher';
+            Image = Info.FinisherImage or '';
+            Height = 85;
+            Corner = 6;
+        });
+
+        local RenderObj = {
+            MainCard = MainCard;
+            Labels = Labels;
+            Row = Row;
+            FinisherCard = FinisherCard;
+        };
+
+        function RenderObj:SetWeapon(title, img)
+            if title then MainCard:SetTitle(title) end;
+            if img then MainCard:SetImage(img) end;
+        end;
+
+        function RenderObj:SetDetail(key, val)
+            if Labels[key] and Labels[key].LabelObj then
+                Labels[key].LabelObj:SetText(Labels[key].Prefix .. ': ' .. tostring(val));
+            end;
+        end;
+
+        function RenderObj:SetWrapImage(img)
+            Row:SetImage('Wrap', img);
+        end;
+
+        function RenderObj:SetCharmImage(img)
+            Row:SetImage('Charm', img);
+        end;
+
+        function RenderObj:SetFinisherImage(img)
+            FinisherCard:SetImage(img);
+        end;
+
+        function RenderObj:Update(data)
+            data = data or {};
+            if data.WeaponTitle or data.Skin then
+                MainCard:SetTitle(data.WeaponTitle or data.Skin);
+            end;
+            if data.WeaponImage then MainCard:SetImage(data.WeaponImage) end;
+            if data.Weapon then self:SetDetail('Weapon', data.Weapon) end;
+            if data.Skin then self:SetDetail('Skin', data.Skin) end;
+            if data.Wrap then self:SetDetail('Wrap', data.Wrap) end;
+            if data.Charm then self:SetDetail('Charm', data.Charm) end;
+            if data.Finisher then self:SetDetail('Finisher', data.Finisher) end;
+            if data.WrapImage then self:SetWrapImage(data.WrapImage) end;
+            if data.CharmImage then self:SetCharmImage(data.CharmImage) end;
+            if data.FinisherImage then self:SetFinisherImage(data.FinisherImage) end;
+        end;
+
+        Options[Idx] = RenderObj;
+        return RenderObj;
+    end;
+
     BaseGroupbox.__index = Funcs;
     BaseGroupbox.__namecall = function(Table, Key, ...)
         return Funcs[Key](...);
@@ -4844,11 +5190,12 @@ function Library:CreateWindow(...)
     });
 
     -- Profile Badge at bottom of sidebar
+    -- Badge tall enough for avatar + two text lines
     local ProfileBadge = Library:Create('Frame', {
         BackgroundColor3 = Color3.fromRGB(18, 18, 20);
         BorderSizePixel = 0;
-        Position = UDim2.new(0, 4, 1, -48);
-        Size = UDim2.new(1, -8, 0, 42);
+        Position = UDim2.new(0, 4, 1, -54);
+        Size = UDim2.new(1, -8, 0, 48);
         ZIndex = 5;
         Parent = SidebarOuter;
     });
@@ -4865,12 +5212,13 @@ function Library:CreateWindow(...)
         Parent = ProfileBadge;
     });
 
+    -- Avatar (left side)
     local ProfileAvatar = Library:Create('ImageLabel', {
         BackgroundColor3 = Color3.fromRGB(30, 30, 35);
         BorderSizePixel = 0;
-        AnchorPoint = Vector2.new(0.5, 0.5);
-        Position = UDim2.new(0.5, 0, 0.5, 0);
-        Size = UDim2.new(0, 32, 0, 32);
+        AnchorPoint = Vector2.new(0, 0.5);
+        Position = UDim2.new(0, 5, 0.5, 0);
+        Size = UDim2.new(0, 28, 0, 28);
         Image = '';
         ScaleType = Enum.ScaleType.Fit;
         ZIndex = 6;
@@ -4887,7 +5235,7 @@ function Library:CreateWindow(...)
         BackgroundColor3 = Color3.fromRGB(87, 242, 135);
         BorderSizePixel = 0;
         AnchorPoint = Vector2.new(1, 1);
-        Position = UDim2.new(1, 0, 1, 0);
+        Position = UDim2.new(1, 1, 1, 1);
         Size = UDim2.new(0, 8, 0, 8);
         ZIndex = 7;
         Parent = ProfileAvatar;
@@ -4896,6 +5244,42 @@ function Library:CreateWindow(...)
     Library:Create('UICorner', {
         CornerRadius = UDim.new(1, 0);
         Parent = OnlineDot;
+    });
+
+    -- DisplayName label
+    local ProfileDisplayName = Library:Create('TextLabel', {
+        BackgroundTransparency = 1;
+        AnchorPoint = Vector2.new(0, 0);
+        Position = UDim2.new(0, 38, 0, 6);
+        Size = UDim2.new(1, -44, 0, 14);
+        Text = (LocalPlayer and LocalPlayer.DisplayName or 'Player');
+        TextColor3 = Library.FontColor;
+        Font = Library.Font;
+        TextSize = 11;
+        TextXAlignment = Enum.TextXAlignment.Left;
+        TextTruncate = Enum.TextTruncate.AtEnd;
+        ZIndex = 6;
+        Parent = ProfileBadge;
+    });
+
+    Library:AddToRegistry(ProfileDisplayName, {
+        TextColor3 = 'FontColor';
+    });
+
+    -- @username label (dimmer)
+    local ProfileUsername = Library:Create('TextLabel', {
+        BackgroundTransparency = 1;
+        AnchorPoint = Vector2.new(0, 0);
+        Position = UDim2.new(0, 38, 0, 22);
+        Size = UDim2.new(1, -44, 0, 13);
+        Text = '@' .. (LocalPlayer and LocalPlayer.Name or 'Player');
+        TextColor3 = Color3.fromRGB(120, 120, 120);
+        Font = Library.Font;
+        TextSize = 10;
+        TextXAlignment = Enum.TextXAlignment.Left;
+        TextTruncate = Enum.TextTruncate.AtEnd;
+        ZIndex = 6;
+        Parent = ProfileBadge;
     });
 
     -- Load avatar async
@@ -4911,8 +5295,6 @@ function Library:CreateWindow(...)
             ProfileAvatar.Image = thumb;
         end;
     end);
-
-    Library:AddToolTip(LocalPlayer.DisplayName .. ' | ' .. LocalPlayer.Name, ProfileBadge);
 
     local TabContainer = Library:Create('Frame', {
         BackgroundColor3 = Color3.fromRGB(16, 16, 16);
