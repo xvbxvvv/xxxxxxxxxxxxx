@@ -6119,6 +6119,8 @@ function Library:CreateWindow(...)
         Parent = TopTabArea;
     });
 
+    local TopTabLayout = TopTabArea:FindFirstChildOfClass('UIListLayout');
+
     local function UpdateSidebarLayout()
         local badgeH = 58;
         local countBottom = 0;
@@ -6133,10 +6135,29 @@ function Library:CreateWindow(...)
         BottomTabArea.Position = UDim2.new(0, 0, 1, -(badgeH + bottomH + 4));
 
         local totalReserved = badgeH + bottomH + 18;
-        TopTabArea.Size = UDim2.new(1, 0, 1, -totalReserved);
+
+        -- Calcule la hauteur réelle du contenu (tabs dans TopTabArea)
+        -- pour éviter le grand espace vide quand il y a peu d'onglets.
+        local topContentH = (TopTabLayout and TopTabLayout.AbsoluteContentSize.Y) or 0;
+        local sideH = SidebarOuter.AbsoluteSize.Y;
+        local maxTopH = math.max(50, sideH - totalReserved - 10);
+        -- Hauteur = contenu + padding, jamais plus que l'espace dispo
+        local topH = math.min(topContentH + 20, maxTopH);
+        -- Si pas encore de taille absolue (premier frame), fallback relatif
+        if sideH <= 10 then
+            TopTabArea.Size = UDim2.new(1, 0, 1, -totalReserved);
+        else
+            TopTabArea.Size = UDim2.new(1, 0, 0, math.max(topH, 50));
+        end;
     end;
 
     BottomTabLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(UpdateSidebarLayout);
+    -- Reconnecter aussi quand le contenu de TopTabArea change (ajout d'un tab)
+    if TopTabLayout then
+        TopTabLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(UpdateSidebarLayout);
+    end;
+    SidebarOuter:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateSidebarLayout);
+
 
     -- Profile Badge at bottom of sidebar
     -- Badge tall enough for avatar + two text lines
@@ -6966,6 +6987,8 @@ function Library:CreateWindow(...)
         Window.Tabs[Name] = Tab;
 
         UpdateSidebarLayout();
+        -- Relancer après le rendu du bouton (AbsoluteContentSize pas encore à jour)
+        task.defer(UpdateSidebarLayout);
 
         -- Show first added tab by default
         if Window.ActiveTab == nil then
