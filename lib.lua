@@ -569,12 +569,16 @@ function Library:UpdateColorsUsingRegistry()
     -- The above would be especially efficient for a rainbow menu color or live color-changing.
 
     for Idx, Object in next, Library.Registry do
-        for Property, ColorIdx in next, Object.Properties do
-            if type(ColorIdx) == 'string' then
-                Object.Instance[Property] = Library[ColorIdx];
-            elseif type(ColorIdx) == 'function' then
-                Object.Instance[Property] = ColorIdx()
-            end
+        if Object and Object.Instance and Object.Instance.Parent then
+            for Property, ColorIdx in next, Object.Properties do
+                pcall(function()
+                    if type(ColorIdx) == 'string' and Library[ColorIdx] ~= nil then
+                        Object.Instance[Property] = Library[ColorIdx];
+                    elseif type(ColorIdx) == 'function' then
+                        Object.Instance[Property] = ColorIdx()
+                    end
+                end)
+            end;
         end;
     end;
 end;
@@ -1800,8 +1804,8 @@ do
 
             SubButton.Outer, SubButton.Inner, SubButton.Label = CreateBaseButton(SubButton)
 
-            SubButton.Outer.Position = UDim2.new(1, 3, 0, 0)
-            SubButton.Outer.Size = UDim2.fromOffset(self.Outer.AbsoluteSize.X - 2, self.Outer.AbsoluteSize.Y)
+            SubButton.Outer.Position = UDim2.new(1, 4, 0, 0)
+            SubButton.Outer.Size = UDim2.new(1, 0, 1, 0)
             SubButton.Outer.Parent = self.Outer
 
             function SubButton:AddTooltip(tooltip)
@@ -4239,6 +4243,7 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0, 8, 0, 8);
             Size = UDim2.new(0.5, -12, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
+            AutomaticCanvasSize = Enum.AutomaticSize.Y;
             ScrollBarThickness = 2;
             ScrollBarImageColor3 = Library.OutlineColor;
             ZIndex = 2;
@@ -4251,6 +4256,7 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0.5, 4, 0, 8);
             Size = UDim2.new(0.5, -12, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
+            AutomaticCanvasSize = Enum.AutomaticSize.Y;
             ScrollBarThickness = 2;
             ScrollBarImageColor3 = Library.OutlineColor;
             ZIndex = 2;
@@ -4263,6 +4269,7 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0, 8, 0, 8);
             Size = UDim2.new(1, -16, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
+            AutomaticCanvasSize = Enum.AutomaticSize.Y;
             ScrollBarThickness = 2;
             ScrollBarImageColor3 = Library.OutlineColor;
             ZIndex = 2;
