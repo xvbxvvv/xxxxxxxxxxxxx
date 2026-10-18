@@ -1142,6 +1142,7 @@ do
 
             Library:SafeCallback(ColorPicker.Callback, ColorPicker.Value);
             Library:SafeCallback(ColorPicker.Changed, ColorPicker.Value);
+            if Library.UpdateESPPreviews then Library:UpdateESPPreviews(); end;
         end;
 
         function ColorPicker:OnChanged(Func)
@@ -2310,6 +2311,7 @@ do
             Library:SafeCallback(Toggle.Callback, Toggle.Value);
             Library:SafeCallback(Toggle.Changed, Toggle.Value);
             Library:UpdateDependencyBoxes();
+            if Library.UpdateESPPreviews then Library:UpdateESPPreviews(); end;
         end;
 
         ToggleRegion.InputBegan:Connect(function(Input)
@@ -2523,6 +2525,7 @@ do
 
             Library:SafeCallback(Slider.Callback, Slider.Value);
             Library:SafeCallback(Slider.Changed, Slider.Value);
+            if Library.UpdateESPPreviews then Library:UpdateESPPreviews(); end;
         end;
 
         local function OnSliderDown(Input)
@@ -3085,6 +3088,7 @@ do
 
             Library:SafeCallback(Dropdown.Callback, Dropdown.Value);
             Library:SafeCallback(Dropdown.Changed, Dropdown.Value);
+            if Library.UpdateESPPreviews then Library:UpdateESPPreviews(); end;
         end;
 
         DropdownOuter.InputBegan:Connect(function(Input)
@@ -3898,22 +3902,27 @@ do
         return RenderObj;
     end;
 
-    function Funcs:AddESPPreview(Idx, Info)
-        if type(Idx) == 'table' and Info == nil then
-            Info = Idx;
-            Idx = Info.Idx or ('ESPPreview_' .. tostring(math.random(10000, 99999)));
-        end;
-        Info = Info or {};
-        local Groupbox = self;
-        local Container = Groupbox.Container;
+    Library.ESPPreviews = Library.ESPPreviews or {};
 
+    function Library:UpdateESPPreviews()
+        if not Library.ESPPreviews then return end;
+        for _, prev in ipairs(Library.ESPPreviews) do
+            if prev and prev.SyncWithToggles then
+                pcall(function() prev:SyncWithToggles() end);
+            end;
+        end;
+    end;
+
+    function Library:CreateESPPreviewWidget(Container, Idx, Info)
+        Info = Info or {};
         local Height = Info.Height or 260;
+        local Standalone = Info.Standalone or false;
 
         local Outer = Library:Create('Frame', {
             BackgroundColor3 = Info.BackgroundColor3 or Color3.fromRGB(14, 14, 18);
             BorderSizePixel = 0;
-            Size = UDim2.new(1, -4, 0, Height);
-            ZIndex = 5;
+            Size = Standalone and UDim2.new(1, 0, 1, 0) or UDim2.new(1, -4, 0, Height);
+            ZIndex = Standalone and 112 or 5;
             ClipsDescendants = true;
             Parent = Container;
         });
@@ -3930,13 +3939,15 @@ do
             Parent = Outer;
         });
 
+        local baseZ = Outer.ZIndex or 5;
+
         local Viewport = Library:Create('ViewportFrame', {
             BackgroundTransparency = 1;
             Size = UDim2.new(1, 0, 1, 0);
             LightColor = Color3.fromRGB(240, 240, 240);
-            Ambient = Color3.fromRGB(150, 150, 160);
+            Ambient = Color3.fromRGB(160, 160, 170);
             LightDirection = Vector3.new(1, -2, -1);
-            ZIndex = 6;
+            ZIndex = baseZ + 1;
             Parent = Outer;
         });
 
@@ -3965,21 +3976,25 @@ do
 
         local OriginalProps = {};
         local CurrentModel = nil;
+        local CurrentMode = '3D'; -- '3D' or 'Image'
 
         local function SetupModel(model)
             if not model then return end;
             if CurrentModel then
-                CurrentModel:Destroy();
+                pcall(function() CurrentModel:Destroy() end);
                 table.clear(OriginalProps);
             end;
 
-            model.Parent = World;
             CurrentModel = model;
+            model.Parent = World;
 
+            -- Enregistrer les proprietes initiales de chaque piece (cheveux, vetements, corps)
             for _, part in ipairs(model:GetDescendants()) do
                 if part:IsA('BasePart') then
-                    part.Anchored = true;
                     part.CanCollide = false;
+                    part.CanTouch = false;
+                    part.CanQuery = false;
+                    part.CastShadow = false;
                     OriginalProps[part] = {
                         Color = part.Color;
                         Material = part.Material;
@@ -3988,95 +4003,117 @@ do
                 end;
             end;
 
-            -- Pose statique neutre par défaut (T-pose / Neutral stand)
-            local root = model:FindFirstChild('HumanoidRootPart') or model:FindFirstChild('Torso') or model.PrimaryPart;
-            if root then
-                model.PrimaryPart = root;
-                root.CFrame = CFrame.new(0, 0, 0);
-            end;
-
-            -- Normaliser l'orientation des membres pour avoir un mannequin propre et fixe
-            pcall(function()
-                for _, motor in ipairs(model:GetDescendants()) do
-                    if motor:IsA('Motor6D') then
-                        motor.Transform = CFrame.new();
-                    end;
-                end;
-            end);
-
-            -- Orientation: face forward toward camera
-            pcall(function()
-                model:PivotTo(CFrame.new(0, 0, 0) * CFrame.Angles(0, math.pi, 0));
-            end);
-
             local cf, size = model:GetBoundingBox();
             TargetCenter = cf.Position;
             Distance = math.max(size.Y * 1.6, 7.8);
             UpdateCamera();
         end;
 
-        -- Helper: strip all animation state from a model to give it a clean T-pose
-        local function StripAndTPose(model)
-            -- First destroy all animation drivers so no new poses are applied
-            for _, desc in ipairs(model:GetDescendants()) do
-                if desc:IsA('Script') or desc:IsA('LocalScript') or desc:IsA('Sound')
-                    or desc:IsA('Animator') or desc:IsA('AnimationController') then
-                    desc:Destroy();
-                elseif desc:IsA('BasePart') then
+        -- Helper pour cloner le personnage du joueur avec TOUS ses cheveux et accessoires UGC
+        local function CloneAndPrepareCharacter(char)
+            if not char then return nil end;
+            local oldArch = char.Archivable;
+            char.Archivable = true;
+            local clone = char:Clone();
+            char.Archivable = oldArch;
+            if not clone then return nil end;
+
+            -- Supprimer les armes / outils en main
+            for _, item in ipairs(clone:GetChildren()) do
+                if item:IsA('Tool') or item:IsA('HopperBin') then
+                    pcall(function() item:Destroy() end);
+                end;
+            end;
+
+            -- Supprimer les scripts, animateurs, sons, particules, highlights et GUIs
+            for _, desc in ipairs(clone:GetDescendants()) do
+                if desc:IsA('LuaSourceContainer') or desc:IsA('Animator')
+                    or desc:IsA('AnimationController') or desc:IsA('Sound')
+                    or desc:IsA('ParticleEmitter') or desc:IsA('Highlight')
+                    or desc:IsA('BillboardGui') or desc:IsA('SurfaceGui')
+                    or desc:IsA('Fire') or desc:IsA('Smoke') or desc:IsA('Sparkles') then
+                    pcall(function() desc:Destroy() end);
+                end;
+            end;
+
+            local hum = clone:FindFirstChildOfClass('Humanoid');
+            if hum then
+                hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
+                hum.PlatformStand = true;
+            end;
+
+            -- Remettre les Motor6D en T-Pose neutre SANS ancrer les pieces
+            -- Cela permet aux AccessoryWelds des cheveux et chapeaux de suivre la tete !
+            for _, desc in ipairs(clone:GetDescendants()) do
+                if desc:IsA('Motor6D') then
+                    pcall(function() desc.Transform = CFrame.new() end);
+                end;
+            end;
+
+            local root = clone:FindFirstChild('HumanoidRootPart') or clone:FindFirstChild('Torso') or clone.PrimaryPart;
+            if root then
+                clone.PrimaryPart = root;
+            end;
+
+            -- Pivoter le modele complet (corps + cheveux + chapeaux) vers le centre face a la camera
+            pcall(function()
+                clone:PivotTo(CFrame.new(0, 0, 0) * CFrame.Angles(0, math.pi, 0));
+            end);
+
+            -- Ancrer les BaseParts seulement APRES le deplacement pour fixer la pose
+            for _, desc in ipairs(clone:GetDescendants()) do
+                if desc:IsA('BasePart') then
                     desc.Anchored = true;
                     desc.CanCollide = false;
                     desc.Velocity = Vector3.zero;
                     desc.RotVelocity = Vector3.zero;
                 end;
             end;
-            -- Reset Motor6D Transform to CFrame.new() = identity (T-pose).
-            -- Transform is the runtime animation offset applied on top of C0/C1.
-            -- Clearing it removes the "current animation frame" pose from the model.
-            for _, desc in ipairs(model:GetDescendants()) do
-                if desc:IsA('Motor6D') then
-                    pcall(function() desc.Transform = CFrame.new(); end);
-                end;
-            end;
-            local hum = model:FindFirstChildOfClass('Humanoid');
-            if hum then
-                hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
-                hum.PlatformStand = true;
-            end;
+
+            return clone;
         end;
 
-        local function CreateStaticPreviewDummy()
-            -- 1. Charger un mannequin propre via CreateHumanoidModelFromUserId
+        local function RefreshDummy()
+            local char = LocalPlayer and LocalPlayer.Character;
+            if char then
+                local clone = CloneAndPrepareCharacter(char);
+                if clone then
+                    SetupModel(clone);
+                    return;
+                end;
+            end;
+
             if LocalPlayer and LocalPlayer.UserId then
                 local ok, dummy = pcall(function()
                     return Players:CreateHumanoidModelFromUserId(LocalPlayer.UserId);
                 end);
                 if ok and dummy then
-                    StripAndTPose(dummy);
-                    return dummy;
+                    local prepared = CloneAndPrepareCharacter(dummy);
+                    if prepared then
+                        SetupModel(prepared);
+                        dummy:Destroy();
+                        return;
+                    else
+                        SetupModel(dummy);
+                        return;
+                    end;
                 end;
             end;
+        end;
 
-            -- 2. Fallback clone du personnage — on clone PUIS on T-pose
-            local char = LocalPlayer and LocalPlayer.Character;
-            if char then
-                local oldArch = char.Archivable;
-                char.Archivable = true;
-                local clone = char:Clone();
-                char.Archivable = oldArch;
-                if clone then
-                    StripAndTPose(clone);
-                    return clone;
-                end;
-            end;
-
-            return nil;
+        if LocalPlayer then
+            LocalPlayer.CharacterAdded:Connect(function()
+                task.wait(0.6);
+                RefreshDummy();
+            end);
         end;
 
         task.spawn(function()
-            local dummy = CreateStaticPreviewDummy();
-            if dummy then
-                SetupModel(dummy);
+            if not (LocalPlayer and LocalPlayer.Character) then
+                pcall(function() LocalPlayer.CharacterAdded:Wait() end);
+                task.wait(0.5);
             end;
+            RefreshDummy();
         end);
 
         -- Mouse & Touch Rotation Controls
@@ -4132,7 +4169,7 @@ do
             local absH = Viewport.AbsoluteSize.Y;
             if absW <= 10 or absH <= 10 then
                 absW = Outer.AbsoluteSize.X;
-                absH = Height;
+                absH = Outer.AbsoluteSize.Y;
             end;
             if absW <= 10 then absW = 220 end;
             if absH <= 10 then absH = Height or 260 end;
@@ -4152,15 +4189,28 @@ do
         local Overlay = Library:Create('Frame', {
             BackgroundTransparency = 1;
             Size = UDim2.new(1, 0, 1, 0);
-            ZIndex = 8;
+            ZIndex = baseZ + 3;
             Parent = Outer;
+        });
+
+        -- 2D Silhouette / Mannequin Image preview
+        local ImagePreview = Library:Create('ImageLabel', {
+            BackgroundTransparency = 1;
+            Size = UDim2.new(0, 108, 0, 186);
+            AnchorPoint = Vector2.new(0.5, 0.5);
+            Position = UDim2.new(0.5, 0, 0.5, 0);
+            Image = 'rbxassetid://10850239462';
+            ScaleType = Enum.ScaleType.Fit;
+            Visible = false;
+            ZIndex = baseZ + 2;
+            Parent = Overlay;
         });
 
         -- Dynamic 3D Skeleton Wireframe Overlay
         local SkeletonContainer = Library:Create('Frame', {
             BackgroundTransparency = 1;
             Size = UDim2.new(1, 0, 1, 0);
-            ZIndex = 8;
+            ZIndex = baseZ + 3;
             Parent = Overlay;
         });
 
@@ -4194,13 +4244,15 @@ do
         };
 
         UpdateSkeleton = function()
-            if not SkeletonEnabled or not CurrentModel then
+            if not SkeletonEnabled or not CurrentModel or CurrentMode == 'Image' then
+                SkeletonContainer.Visible = false;
                 for _, line in pairs(BoneLines) do
                     line.Visible = false;
                 end;
                 return;
             end;
 
+            SkeletonContainer.Visible = true;
             local isR15 = CurrentModel:FindFirstChild('UpperTorso') ~= nil;
             local boneDefs = isR15 and R15_Bones or R6_Bones;
 
@@ -4213,7 +4265,7 @@ do
                         BackgroundColor3 = SkeletonColor;
                         BorderSizePixel = 0;
                         AnchorPoint = Vector2.new(0.5, 0.5);
-                        ZIndex = 8;
+                        ZIndex = baseZ + 3;
                         Parent = SkeletonContainer;
                     });
                     Library:Create('UIStroke', {
@@ -4262,7 +4314,7 @@ do
             AnchorPoint = Vector2.new(0.5, 0.5);
             Position = UDim2.new(0.5, 0, 0.5, 0);
             Size = UDim2.new(0, 108, 0, 186);
-            ZIndex = 9;
+            ZIndex = baseZ + 4;
             Parent = Overlay;
         });
 
@@ -4278,7 +4330,7 @@ do
             BorderSizePixel = 0;
             Position = UDim2.new(0, 1, 0, 1);
             Size = UDim2.new(1, -2, 1, -2);
-            ZIndex = 9;
+            ZIndex = baseZ + 4;
             Parent = BoxMain;
         });
 
@@ -4294,7 +4346,7 @@ do
             BorderSizePixel = 0;
             Position = UDim2.new(0, -1, 0, -1);
             Size = UDim2.new(1, 2, 1, 2);
-            ZIndex = 9;
+            ZIndex = baseZ + 4;
             Parent = BoxMain;
         });
 
@@ -4310,7 +4362,7 @@ do
             BackgroundTransparency = 1;
             Size = UDim2.new(1, 0, 1, 0);
             Visible = false;
-            ZIndex = 9;
+            ZIndex = baseZ + 4;
             Parent = BoxMain;
         });
 
@@ -4325,7 +4377,7 @@ do
                 AnchorPoint = anchor;
                 Position = pos;
                 Size = size;
-                ZIndex = 9;
+                ZIndex = baseZ + 4;
                 Parent = CornerHolder;
             });
             Library:Create('UIStroke', {
@@ -4359,7 +4411,7 @@ do
             BorderSizePixel = 0;
             Position = UDim2.new(0, -7, 0, 0);
             Size = UDim2.new(0, 3, 1, 0);
-            ZIndex = 10;
+            ZIndex = baseZ + 5;
             Parent = BoxMain;
         });
 
@@ -4376,7 +4428,7 @@ do
             AnchorPoint = Vector2.new(0, 1);
             Position = UDim2.new(0, 0, 1, 0);
             Size = UDim2.new(1, 0, 1, 0);
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = HealthBarBg;
         });
 
@@ -4390,7 +4442,7 @@ do
             TextXAlignment = Enum.TextXAlignment.Right;
             TextStrokeTransparency = 0;
             TextStrokeColor3 = Color3.new(0, 0, 0);
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = HealthBarBg;
         });
 
@@ -4400,7 +4452,7 @@ do
             BorderSizePixel = 0;
             Position = UDim2.new(0, 0, 1, 2);
             Size = UDim2.new(1, 0, 0, 2.5);
-            ZIndex = 10;
+            ZIndex = baseZ + 5;
             Visible = false;
             Parent = BoxMain;
         });
@@ -4417,7 +4469,7 @@ do
             BorderSizePixel = 0;
             Position = UDim2.new(0, 0, 0, 0);
             Size = UDim2.new(1, 0, 1, 0);
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = AmmoBarBg;
         });
 
@@ -4431,7 +4483,7 @@ do
             TextStrokeTransparency = 0;
             TextStrokeColor3 = Color3.new(0, 0, 0);
             Visible = false;
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = AmmoBarBg;
         });
 
@@ -4440,12 +4492,12 @@ do
             AnchorPoint = Vector2.new(0.5, 1);
             Position = UDim2.new(0.5, 0, 0, -5);
             Size = UDim2.new(1, 60, 0, 14);
-            Text = (LocalPlayer and LocalPlayer.DisplayName) or 'LocalPlayer';
+            Text = (LocalPlayer and (LocalPlayer.DisplayName or LocalPlayer.Name)) or 'LocalPlayer';
             TextSize = 11;
             TextColor3 = Color3.fromRGB(255, 255, 255);
             TextStrokeTransparency = 0;
             TextStrokeColor3 = Color3.new(0, 0, 0);
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = BoxMain;
         });
 
@@ -4459,7 +4511,7 @@ do
             TextColor3 = Color3.fromRGB(220, 220, 230);
             TextStrokeTransparency = 0;
             TextStrokeColor3 = Color3.new(0, 0, 0);
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = BoxMain;
         });
 
@@ -4474,7 +4526,7 @@ do
             TextStrokeTransparency = 0;
             TextStrokeColor3 = Color3.new(0, 0, 0);
             Visible = false;
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = BoxMain;
         });
 
@@ -4483,7 +4535,7 @@ do
             BackgroundTransparency = 1;
             Position = UDim2.new(1, 6, 0, 0);
             Size = UDim2.new(0, 50, 1, 0);
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = BoxMain;
         });
 
@@ -4510,12 +4562,13 @@ do
                 TextStrokeTransparency = 0;
                 TextStrokeColor3 = Color3.new(0, 0, 0);
                 TextXAlignment = Enum.TextXAlignment.Left;
-                ZIndex = 11;
+                ZIndex = baseZ + 6;
                 Parent = FlagsHolder;
             });
             FlagLabels[flag.Key] = fl;
         end;
 
+        -- Bouton Reinitialiser l'angle camera
         local ResetBtn = Library:Create('TextButton', {
             AnchorPoint = Vector2.new(1, 0);
             Position = UDim2.new(1, -8, 0, 8);
@@ -4524,7 +4577,7 @@ do
             Text = '⟲';
             TextColor3 = Color3.fromRGB(200, 200, 210);
             TextSize = 14;
-            ZIndex = 12;
+            ZIndex = baseZ + 7;
             Parent = Outer;
         });
 
@@ -4548,6 +4601,33 @@ do
 
         Library:AddToolTip('Reset 3D camera angle', ResetBtn);
 
+        -- Bouton Bascule Mode 3D / 2D Image
+        local ModeBtn = Library:Create('TextButton', {
+            AnchorPoint = Vector2.new(1, 0);
+            Position = UDim2.new(1, -36, 0, 8);
+            Size = UDim2.new(0, 28, 0, 24);
+            BackgroundColor3 = Color3.fromRGB(24, 24, 30);
+            Text = '3D';
+            TextColor3 = Color3.fromRGB(0, 255, 140);
+            TextSize = 10;
+            Font = Enum.Font.GothamBold;
+            ZIndex = baseZ + 7;
+            Parent = Outer;
+        });
+
+        Library:Create('UICorner', {
+            CornerRadius = UDim.new(0, 4);
+            Parent = ModeBtn;
+        });
+
+        Library:Create('UIStroke', {
+            Color = Color3.fromRGB(48, 48, 56);
+            Thickness = 1;
+            Parent = ModeBtn;
+        });
+
+        Library:AddToolTip('Basculer entre skin 3D et image 2D', ModeBtn);
+
         local HintLabel = Library:CreateLabel({
             AnchorPoint = Vector2.new(0, 1);
             Position = UDim2.new(0, 8, 1, -6);
@@ -4556,15 +4636,45 @@ do
             TextSize = 10;
             TextColor3 = Color3.fromRGB(130, 130, 145);
             TextXAlignment = Enum.TextXAlignment.Left;
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = Outer;
         });
+
+        local function SetPreviewMode(mode)
+            if mode == 'Image' or mode == '2D' or mode == '2D Image' then
+                CurrentMode = 'Image';
+                ModeBtn.Text = '2D';
+                ModeBtn.TextColor3 = Color3.fromRGB(80, 180, 255);
+                Viewport.Visible = false;
+                ImagePreview.Visible = true;
+                SkeletonContainer.Visible = false;
+                HintLabel.Text = '🖼️ Mode Image 2D Mannequin';
+            else
+                CurrentMode = '3D';
+                ModeBtn.Text = '3D';
+                ModeBtn.TextColor3 = Color3.fromRGB(0, 255, 140);
+                Viewport.Visible = true;
+                ImagePreview.Visible = false;
+                SkeletonContainer.Visible = SkeletonEnabled;
+                HintLabel.Text = '🖱️ Drag to rotate • 🔍 Scroll to zoom';
+                UpdateSkeleton();
+            end;
+        end;
+
+        ModeBtn.MouseButton1Click:Connect(function()
+            if CurrentMode == '3D' then
+                SetPreviewMode('Image');
+            else
+                SetPreviewMode('3D');
+            end;
+        end);
 
         local ESPPreviewObj = {
             Outer = Outer;
             Viewport = Viewport;
             World = World;
             Camera = Camera;
+            ImagePreview = ImagePreview;
             BoxMain = BoxMain;
             BoxStrokeMain = BoxStrokeMain;
             CornerHolder = CornerHolder;
@@ -4582,6 +4692,34 @@ do
             FlagLabels = FlagLabels;
             SkeletonContainer = SkeletonContainer;
         };
+
+        function ESPPreviewObj:SetMode(mode)
+            SetPreviewMode(mode);
+        end;
+
+        function ESPPreviewObj:ToggleMode()
+            if CurrentMode == '3D' then
+                SetPreviewMode('Image');
+            else
+                SetPreviewMode('3D');
+            end;
+        end;
+
+        function ESPPreviewObj:GetMode()
+            return CurrentMode;
+        end;
+
+        function ESPPreviewObj:SetImage(assetId)
+            if not assetId or assetId == '' then
+                ImagePreview.Image = 'rbxassetid://10850239462';
+            else
+                ImagePreview.Image = Library:GetCustomAsset(assetId);
+            end;
+        end;
+
+        function ESPPreviewObj:RefreshModel()
+            RefreshDummy();
+        end;
 
         function ESPPreviewObj:SetBox(visible, color, style)
             BoxMain.Visible = (visible ~= false);
@@ -4616,6 +4754,7 @@ do
         function ESPPreviewObj:SetSkeleton(visible, color)
             SkeletonEnabled = (visible ~= false);
             if color then SkeletonColor = color end;
+            SkeletonContainer.Visible = SkeletonEnabled and (CurrentMode ~= 'Image');
             UpdateSkeleton();
         end;
 
@@ -4710,6 +4849,112 @@ do
         function ESPPreviewObj:SetModel(newModel)
             SetupModel(newModel);
         end;
+
+        function ESPPreviewObj:SyncWithToggles()
+            local master = true;
+            if Toggles.ESPEnabled ~= nil then master = Toggles.ESPEnabled.Value
+            elseif Toggles.esp_on ~= nil then master = Toggles.esp_on.Value
+            elseif Toggles.MasterESP ~= nil then master = Toggles.MasterESP.Value
+            end;
+
+            if not master then
+                self:SetBox(false);
+                self:SetSkeleton(false);
+                self:SetName(false);
+                self:SetHealth(false);
+                self:SetAmmo(false);
+                self:SetWeapon(false);
+                self:SetDistance(false);
+                self:SetFlags(false);
+                self:SetChams(false);
+                return;
+            end;
+
+            local boxTog = Toggles.BoxESP or Toggles.esp_box or Toggles.Box;
+            local boxColOpt = Options.BoxColor or Options.esp_box_col or Options.Box;
+            local boxStyleOpt = Options.BoxStyle or Options.esp_box_style;
+            local boxVis = (boxTog == nil) or boxTog.Value;
+            local boxCol = boxColOpt and boxColOpt.Value or Color3.fromRGB(255, 255, 255);
+            local boxStyle = boxStyleOpt and boxStyleOpt.Value or 'Corner';
+            self:SetBox(boxVis, boxCol, boxStyle);
+
+            local fillTog = Toggles.BoxFill or Toggles.esp_box_fill;
+            local fillColOpt = Options.BoxFillColor or Options.esp_box_fill_col;
+            local fillTransOpt = Options.BoxFillTransparency or Options.esp_box_fill_trans;
+            local fillVis = fillTog and fillTog.Value or false;
+            local fillCol = fillColOpt and fillColOpt.Value or Color3.fromRGB(255, 255, 255);
+            local fillTrans = fillTransOpt and fillTransOpt.Value or 0.85;
+            self:SetBoxFill(fillVis, fillCol, fillTrans);
+
+            local skelTog = Toggles.SkeletonESP or Toggles.esp_skel or Toggles.Skeleton;
+            local skelColOpt = Options.SkeletonColor or Options.esp_skel_col;
+            local skelVis = skelTog and skelTog.Value or false;
+            local skelCol = skelColOpt and skelColOpt.Value or Color3.fromRGB(255, 255, 255);
+            self:SetSkeleton(skelVis, skelCol);
+
+            local hpTog = Toggles.HealthBar or Toggles.esp_hp or Toggles.Health;
+            local hpNumTog = Toggles.HealthNumber or Toggles.esp_hp_num;
+            local hpVis = (hpTog == nil) or hpTog.Value;
+            local hpNum = (hpNumTog == nil) or hpNumTog.Value;
+            self:SetHealth(hpVis, 100, hpNum);
+
+            local ammoTog = Toggles.AmmoBar or Toggles.esp_ammo;
+            local ammoColOpt = Options.AmmoColor or Options.esp_ammo_col;
+            local ammoVis = ammoTog and ammoTog.Value or false;
+            local ammoCol = ammoColOpt and ammoColOpt.Value or Color3.fromRGB(80, 140, 255);
+            self:SetAmmo(ammoVis, 1.0, ammoCol, '30');
+
+            local nameTog = Toggles.NameESP or Toggles.esp_name or Toggles.Name;
+            local nameColOpt = Options.NameColor or Options.esp_name_col;
+            local nameVis = (nameTog == nil) or nameTog.Value;
+            local nameCol = nameColOpt and nameColOpt.Value or Color3.fromRGB(255, 255, 255);
+            local displayName = LocalPlayer and (LocalPlayer.DisplayName or LocalPlayer.Name) or 'LocalPlayer';
+            self:SetName(nameVis, nameCol, displayName);
+
+            local wepTog = Toggles.WeaponESP or Toggles.esp_wep or Toggles.Weapon;
+            local wepColOpt = Options.WeaponColor or Options.esp_wep_col;
+            local wepVis = (wepTog == nil) or wepTog.Value;
+            local wepCol = wepColOpt and wepColOpt.Value or Color3.fromRGB(220, 220, 230);
+            local curWeapon = (Options.SkinWeapon and Options.SkinWeapon.Value) or 'Assault Rifle';
+            self:SetWeapon(wepVis, wepCol, curWeapon);
+
+            local distTog = Toggles.DistanceESP or Toggles.esp_dist_tag or Toggles.Distance;
+            local distColOpt = Options.DistanceColor or Options.esp_dist_col;
+            local distVis = distTog and distTog.Value or false;
+            local distCol = distColOpt and distColOpt.Value or Color3.fromRGB(175, 175, 190);
+            self:SetDistance(distVis, distCol, '18m');
+
+            local flagsTog = Toggles.FlagsESP or Toggles.esp_flags;
+            local flagsVis = flagsTog and flagsTog.Value or false;
+            self:SetFlags(flagsVis, { Armor = true, Scoped = true, VIP = true, Flashed = false, Reload = false });
+
+            local chamsTog = Toggles.ChamsEnabled or Toggles.chams_on or Toggles.Chams;
+            local chamsColOpt = Options.ChamsColor or Options.chams_col;
+            local chamsTransOpt = Options.ChamsTransparency or Options.chams_trans;
+            local chamsMatOpt = Options.ChamsMaterial or Options.chams_mat;
+            local chamsVis = chamsTog and chamsTog.Value or false;
+            local chamsCol = chamsColOpt and chamsColOpt.Value or Color3.fromRGB(255, 255, 255);
+            local chamsTrans = chamsTransOpt and chamsTransOpt.Value or 0.35;
+            local matName = chamsMatOpt and chamsMatOpt.Value or 'Neon';
+            local chamsMat = Enum.Material[matName] or Enum.Material.Neon;
+            self:SetChams(chamsVis, chamsCol, chamsTrans, chamsMat);
+        end;
+
+        table.insert(Library.ESPPreviews, ESPPreviewObj);
+
+        return ESPPreviewObj;
+    end;
+
+    function Funcs:AddESPPreview(Idx, Info)
+        if type(Idx) == 'table' and Info == nil then
+            Info = Idx;
+            Idx = Info.Idx or ('ESPPreview_' .. tostring(math.random(10000, 99999)));
+        end;
+        Info = Info or {};
+        local Groupbox = self;
+        local Container = Groupbox.Container;
+
+        local ESPPreviewObj = Library:CreateESPPreviewWidget(Container, Idx, Info);
 
         Groupbox:AddBlank(Info.BlankSize or 5);
         Groupbox:Resize();
@@ -4877,6 +5122,116 @@ do
     Library.KeybindFrame = KeybindOuter;
     Library.KeybindContainer = KeybindContainer;
     Library:MakeDraggable(KeybindOuter);
+
+    -- Standalone Floating ESP Preview Window (affichable hors du menu via le tab Settings)
+    local FloatingESPOuter = Library:Create('Frame', {
+        AnchorPoint = Vector2.new(0, 0);
+        BorderColor3 = Color3.new(0, 0, 0);
+        Position = UDim2.new(0, 20, 0, 200);
+        Size = UDim2.new(0, 230, 0, 310);
+        Visible = false;
+        ZIndex = 110;
+        Parent = ScreenGui;
+    });
+
+    local FloatingESPInner = Library:Create('Frame', {
+        BackgroundColor3 = Library.MainColor;
+        BorderColor3 = Library.OutlineColor;
+        BorderMode = Enum.BorderMode.Inset;
+        Size = UDim2.new(1, 0, 1, 0);
+        ZIndex = 111;
+        Parent = FloatingESPOuter;
+    });
+
+    Library:AddToRegistry(FloatingESPInner, {
+        BackgroundColor3 = 'MainColor';
+        BorderColor3 = 'OutlineColor';
+    }, true);
+
+    local FloatingAccent = Library:Create('Frame', {
+        BackgroundColor3 = Library.AccentColor;
+        BorderSizePixel = 0;
+        Size = UDim2.new(1, 0, 0, 2);
+        ZIndex = 112;
+        Parent = FloatingESPInner;
+    });
+
+    Library:AddToRegistry(FloatingAccent, {
+        BackgroundColor3 = 'AccentColor';
+    }, true);
+
+    local FloatingHeader = Library:Create('Frame', {
+        BackgroundTransparency = 1;
+        Size = UDim2.new(1, 0, 0, 22);
+        Position = UDim2.new(0, 0, 0, 2);
+        ZIndex = 113;
+        Parent = FloatingESPInner;
+    });
+
+    local FloatingTitle = Library:CreateLabel({
+        Size = UDim2.new(1, -30, 1, 0);
+        Position = UDim2.new(0, 8, 0, 0);
+        TextXAlignment = Enum.TextXAlignment.Left;
+        Text = 'ESP Preview';
+        TextSize = 11;
+        TextColor3 = Library.FontColor;
+        ZIndex = 114;
+        Parent = FloatingHeader;
+    });
+
+    Library:AddToRegistry(FloatingTitle, {
+        TextColor3 = 'FontColor';
+    }, true);
+
+    local FloatingClose = Library:Create('TextButton', {
+        AnchorPoint = Vector2.new(1, 0.5);
+        Position = UDim2.new(1, -6, 0.5, 0);
+        Size = UDim2.new(0, 16, 0, 16);
+        BackgroundColor3 = Color3.fromRGB(24, 24, 28);
+        BorderColor3 = Color3.fromRGB(45, 45, 52);
+        Text = '✕';
+        TextColor3 = Color3.fromRGB(180, 180, 190);
+        TextSize = 10;
+        ZIndex = 115;
+        Parent = FloatingHeader;
+    });
+
+    FloatingClose.MouseButton1Click:Connect(function()
+        if Toggles.ShowESPPreview then
+            Toggles.ShowESPPreview:SetValue(false);
+        else
+            Library:SetFloatingESPPreviewVisibility(false);
+        end;
+    end);
+
+    local FloatingBody = Library:Create('Frame', {
+        BackgroundTransparency = 1;
+        Position = UDim2.new(0, 5, 0, 26);
+        Size = UDim2.new(1, -10, 1, -31);
+        ZIndex = 113;
+        Parent = FloatingESPInner;
+    });
+
+    Library.FloatingESPFrame = FloatingESPOuter;
+    Library:MakeDraggable(FloatingESPOuter);
+
+    task.defer(function()
+        if Library.CreateESPPreviewWidget then
+            Library.FloatingESPWidget = Library:CreateESPPreviewWidget(FloatingBody, 'FloatingESPPreview', {
+                Height = 270,
+                Standalone = true,
+            });
+        end;
+    end);
+end;
+
+function Library:SetFloatingESPPreviewVisibility(Bool)
+    if Library.FloatingESPFrame then
+        Library.FloatingESPFrame.Visible = Bool;
+        if Bool and Library.FloatingESPWidget and Library.FloatingESPWidget.SyncWithToggles then
+            Library.FloatingESPWidget:SyncWithToggles();
+        end;
+    end;
 end;
 
 function Library:SetWatermarkVisibility(Bool)
@@ -7341,7 +7696,7 @@ function Library:CreateWindow(...)
             SaveManager:IgnoreThemeSettings();
             SaveManager:SetIgnoreIndexes({
                 'SaveManager_ConfigList', 'SaveManager_ConfigName', 'SaveManager_AutoLoadToggle',
-                'MenuKeybind', 'KeybindMenuOpen', 'ShowWatermark', 'ShowCustomCursor', 'NotificationSide'
+                'MenuKeybind', 'KeybindMenuOpen', 'ShowWatermark', 'ShowCustomCursor', 'NotificationSide', 'ShowESPPreview'
             });
             SaveManager:SetFolder(configFolder);
             SaveManager:BuildConfigSection(SettingsTab);
@@ -7361,6 +7716,14 @@ function Library:CreateWindow(...)
                 end,
             });
         end;
+
+        MenuBox:AddToggle('ShowESPPreview', {
+            Text = 'Show ESP Preview',
+            Default = false,
+            Callback = function(v)
+                Library:SetFloatingESPPreviewVisibility(v);
+            end,
+        });
 
         MenuBox:AddToggle('ShowWatermark', {
             Text = 'Show Watermark',
