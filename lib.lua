@@ -126,38 +126,41 @@ local Library = {
     Icons = {
         Rage = 'rbxassetid://18484264435',
         Combat = 'rbxassetid://18484264435',
-        Legit = 'rbxassetid://14695120237',
-        AntiAim = 'rbxassetid://7992557358',
-        ['Anti-Aim'] = 'rbxassetid://7992557358',
-        Visual = 'rbxassetid://127234874352422',
-        visual = 'rbxassetid://127234874352422',
-        Visuals = 'rbxassetid://127234874352422',
-        visuals = 'rbxassetid://127234874352422',
-        Misc = 'rbxassetid://7059346373',
-        misc = 'rbxassetid://7059346373',
-        Settings = 'rbxassetid://78388764182737',
-        settings = 'rbxassetid://78388764182737',
-        gear = 'rbxassetid://78388764182737',
-        wrench = 'rbxassetid://78388764182737',
-        ['UI Settings'] = 'rbxassetid://78388764182737',
-        Configs = 'rbxassetid://78388764182737',
-        Config = 'rbxassetid://78388764182737',
-        Players = 'rbxassetid://15016878198',
-        Profile = 'rbxassetid://15016878198',
-        Default = 'rbxassetid://7059346373',
-        crosshair = 'rbxassetid://83752373575368',
-        Crosshair = 'rbxassetid://83752373575368',
-        Aimbot = 'rbxassetid://83752373575368',
-        aimbot = 'rbxassetid://83752373575368',
-        eye = 'rbxassetid://85332511060401',
-        Eye = 'rbxassetid://85332511060401',
-        ESP = 'rbxassetid://85332511060401',
-        esp = 'rbxassetid://85332511060401',
+        Legit = 'rbxassetid://7733765307',
+        AntiAim = 'rbxassetid://7734056608',
+        ['Anti-Aim'] = 'rbxassetid://7734056608',
+        Visual = 'rbxassetid://7733774602',
+        visual = 'rbxassetid://7733774602',
+        Visuals = 'rbxassetid://7733774602',
+        visuals = 'rbxassetid://7733774602',
+        Misc = 'rbxassetid://7734053495',
+        misc = 'rbxassetid://7734053495',
+        Settings = 'rbxassetid://7734053495',
+        settings = 'rbxassetid://7734053495',
+        gear = 'rbxassetid://7734053495',
+        wrench = 'rbxassetid://7734053495',
+        ['UI Settings'] = 'rbxassetid://7734053495',
+        Configs = 'rbxassetid://7733799901',
+        Config = 'rbxassetid://7733799901',
+        Players = 'rbxassetid://7743876054',
+        players = 'rbxassetid://7743876054',
+        Profile = 'rbxassetid://7743876054',
+        Default = 'rbxassetid://7734053495',
+        crosshair = 'rbxassetid://7733765307',
+        Crosshair = 'rbxassetid://7733765307',
+        Aimbot = 'rbxassetid://7733765307',
+        aimbot = 'rbxassetid://7733765307',
+        eye = 'rbxassetid://7733774602',
+        Eye = 'rbxassetid://7733774602',
+        ESP = 'rbxassetid://7733774602',
+        esp = 'rbxassetid://7733774602',
         circle = 'rbxassetid://5881046614',
         FOV = 'rbxassetid://5881046614',
         maximize = 'rbxassetid://5881046614',
-        skin = 'rbxassetid://97652569554326',
-        shirt = 'rbxassetid://97652569554326',
+        skin = 'rbxassetid://7734056672',
+        Skin = 'rbxassetid://7734056672',
+        ['Skin Changer'] = 'rbxassetid://7734056672',
+        shirt = 'rbxassetid://7734056672',
     };
     ShowCustomCursor = false;
 };
@@ -5645,10 +5648,16 @@ function Library:CreateWindow(...)
         BackgroundColor3 = 'BackgroundColor';
     });
 
-    local TopTabArea = Library:Create('Frame', {
+    local TopTabArea = Library:Create('ScrollingFrame', {
         BackgroundTransparency = 1;
+        BorderSizePixel = 0;
         Position = UDim2.new(0, 0, 0, 10);
-        Size = UDim2.new(1, 0, 1, -120);
+        Size = UDim2.new(1, 0, 1, -125);
+        CanvasSize = UDim2.new(0, 0, 0, 0);
+        AutomaticCanvasSize = Enum.AutomaticSize.Y;
+        ScrollBarThickness = 0;
+        ScrollingDirection = Enum.ScrollingDirection.Y;
+        Selectable = false;
         ZIndex = 4;
         Parent = SidebarOuter;
     });
@@ -5657,14 +5666,14 @@ function Library:CreateWindow(...)
         FillDirection = Enum.FillDirection.Vertical;
         HorizontalAlignment = Enum.HorizontalAlignment.Center;
         SortOrder = Enum.SortOrder.LayoutOrder;
-        Padding = UDim.new(0, 18);
+        Padding = UDim.new(0, 8);
         Parent = TopTabArea;
     });
 
     local BottomTabArea = Library:Create('Frame', {
         BackgroundTransparency = 1;
-        Position = UDim2.new(0, 0, 1, -108);
-        Size = UDim2.new(1, 0, 0, 58);
+        Position = UDim2.new(0, 0, 1, -112);
+        Size = UDim2.new(1, 0, 0, 52);
         ZIndex = 4;
         Parent = SidebarOuter;
     });
@@ -5830,17 +5839,22 @@ function Library:CreateWindow(...)
 
         local lowerName = Name:lower();
         local lowerIcon = type(Icon) == 'string' and Icon:lower() or '';
-        local isBottom = (lowerName == 'profile' or lowerName == 'players' or lowerName == 'settings' or lowerName == 'configs' or lowerName == 'ui settings' or lowerIcon == 'profile' or lowerIcon == 'players' or lowerIcon == 'settings' or lowerIcon == 'configs' or lowerIcon == 'wrench');
+        local isBottom = (lowerName == 'settings' or lowerName == 'configs' or lowerName == 'config' or lowerName == 'ui settings' or lowerIcon == 'settings' or lowerIcon == 'gear' or lowerIcon == 'wrench');
         local targetParent = isBottom and BottomTabArea or TopTabArea;
 
         local TabButton = Library:Create('ImageButton', {
             BackgroundTransparency = 1;
-            Size = UDim2.new(0, 48, 0, 48);
+            Size = UDim2.new(0, 42, 0, 42);
             Image = ResolvedIcon;
-            ImageColor3 = Color3.fromRGB(90, 90, 90);
+            ImageColor3 = Color3.fromRGB(120, 120, 130);
             ScaleType = Enum.ScaleType.Fit;
             ZIndex = 5;
             Parent = targetParent;
+        });
+
+        Library:Create('UICorner', {
+            CornerRadius = UDim.new(0, 6);
+            Parent = TabButton;
         });
 
         Library:AddToolTip(Name, TabButton);
@@ -5853,7 +5867,7 @@ function Library:CreateWindow(...)
 
         TabButton.MouseLeave:Connect(function()
             if TabButton.ImageColor3 ~= Color3.fromRGB(255, 255, 255) then
-                TabButton.ImageColor3 = Color3.fromRGB(90, 90, 90);
+                TabButton.ImageColor3 = Color3.fromRGB(120, 120, 130);
             end;
         end);
 
@@ -5929,6 +5943,14 @@ function Library:CreateWindow(...)
             Parent = LeftSide;
         });
 
+        Library:Create('UIPadding', {
+            PaddingTop = UDim.new(0, 14);
+            PaddingBottom = UDim.new(0, 14);
+            PaddingLeft = UDim.new(0, 2);
+            PaddingRight = UDim.new(0, 2);
+            Parent = LeftSide;
+        });
+
         Library:Create('UIListLayout', {
             Padding = UDim.new(0, 10);
             FillDirection = Enum.FillDirection.Vertical;
@@ -5937,11 +5959,27 @@ function Library:CreateWindow(...)
             Parent = RightSide;
         });
 
+        Library:Create('UIPadding', {
+            PaddingTop = UDim.new(0, 14);
+            PaddingBottom = UDim.new(0, 14);
+            PaddingLeft = UDim.new(0, 2);
+            PaddingRight = UDim.new(0, 2);
+            Parent = RightSide;
+        });
+
         Library:Create('UIListLayout', {
             Padding = UDim.new(0, 10);
             FillDirection = Enum.FillDirection.Vertical;
             SortOrder = Enum.SortOrder.LayoutOrder;
             HorizontalAlignment = Enum.HorizontalAlignment.Center;
+            Parent = FullSide;
+        });
+
+        Library:Create('UIPadding', {
+            PaddingTop = UDim.new(0, 14);
+            PaddingBottom = UDim.new(0, 14);
+            PaddingLeft = UDim.new(0, 2);
+            PaddingRight = UDim.new(0, 2);
             Parent = FullSide;
         });
 
@@ -5966,7 +6004,7 @@ function Library:CreateWindow(...)
         end;
 
         function Tab:HideTab()
-            TabButton.ImageColor3 = Color3.fromRGB(90, 90, 90);
+            TabButton.ImageColor3 = Color3.fromRGB(120, 120, 130);
             TabFrame.Visible = false;
         end;
 
