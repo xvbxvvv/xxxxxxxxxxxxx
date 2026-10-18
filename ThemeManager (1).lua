@@ -1,4 +1,13 @@
 local httpService = game:GetService('HttpService')
+
+local isfile = isfile or function(path) return false end
+local isfolder = isfolder or function(path) return false end
+local makefolder = makefolder or function(path) end
+local readfile = readfile or function(path) return nil end
+local writefile = writefile or function(path, content) end
+local listfiles = listfiles or function(path) return {} end
+local delfile = (delfile or (syn and syn.delfile)) or function(path) end
+
 local ThemeManager = {} do
 	ThemeManager.Folder = 'LinoriaLibSettings'
 	-- if not isfolder(ThemeManager.Folder) then makefolder(ThemeManager.Folder) end
@@ -6,15 +15,16 @@ local ThemeManager = {} do
 	ThemeManager.Library = nil
 	ThemeManager.DefaultTheme = 'ezwin.cc'
 	ThemeManager.BuiltInThemes = {
-		['ezwin.cc'] 		= { 1, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"141414","AccentColor":"ffffff","BackgroundColor":"0c0c0c","OutlineColor":"282828"}') },
-		['Default'] 		= { 2, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"1c1c1c","AccentColor":"0055ff","BackgroundColor":"141414","OutlineColor":"323232"}') },
-		['BBot'] 			= { 3, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"1e1e1e","AccentColor":"7e48a3","BackgroundColor":"232323","OutlineColor":"141414"}') },
-		['Fatality']		= { 4, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"1e1842","AccentColor":"c50754","BackgroundColor":"191335","OutlineColor":"3c355d"}') },
-		['Jester'] 			= { 5, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"242424","AccentColor":"db4467","BackgroundColor":"1c1c1c","OutlineColor":"373737"}') },
-		['Mint'] 			= { 6, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"242424","AccentColor":"3db488","BackgroundColor":"1c1c1c","OutlineColor":"373737"}') },
-		['Tokyo Night'] 	= { 7, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"191925","AccentColor":"6759b3","BackgroundColor":"16161f","OutlineColor":"323232"}') },
-		['Ubuntu'] 			= { 8, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"3e3e3e","AccentColor":"e2581e","BackgroundColor":"323232","OutlineColor":"191919"}') },
-		['Quartz'] 			= { 9, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"232330","AccentColor":"426e87","BackgroundColor":"1d1b26","OutlineColor":"27232f"}') },
+		['ezwin.cc'] 		= { 1, httpService:JSONDecode('{"FontColor":"e8eaf6","MainColor":"0d0f1a","AccentColor":"7986cb","BackgroundColor":"080a14","OutlineColor":"1a1d2e"}') },
+		['Liquid Glass']	= { 2, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"0d1020","AccentColor":"88aaff","BackgroundColor":"080c18","OutlineColor":"1e2440"}') },
+		['Default'] 		= { 3, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"1c1c1c","AccentColor":"0055ff","BackgroundColor":"141414","OutlineColor":"323232"}') },
+		['BBot'] 			= { 4, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"1e1e1e","AccentColor":"7e48a3","BackgroundColor":"232323","OutlineColor":"141414"}') },
+		['Fatality']		= { 5, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"1e1842","AccentColor":"c50754","BackgroundColor":"191335","OutlineColor":"3c355d"}') },
+		['Jester'] 			= { 6, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"242424","AccentColor":"db4467","BackgroundColor":"1c1c1c","OutlineColor":"373737"}') },
+		['Mint'] 			= { 7, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"242424","AccentColor":"3db488","BackgroundColor":"1c1c1c","OutlineColor":"373737"}') },
+		['Tokyo Night'] 	= { 8, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"191925","AccentColor":"6759b3","BackgroundColor":"16161f","OutlineColor":"323232"}') },
+		['Ubuntu'] 			= { 9, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"3e3e3e","AccentColor":"e2581e","BackgroundColor":"323232","OutlineColor":"191919"}') },
+		['Quartz'] 			= { 10, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"232330","AccentColor":"426e87","BackgroundColor":"1d1b26","OutlineColor":"27232f"}') },
 	}
 
 	function ThemeManager:ApplyTheme(theme)
@@ -50,9 +60,12 @@ local ThemeManager = {} do
 		self.Library:UpdateColorsUsingRegistry()
 	end
 
-	function ThemeManager:LoadDefault()		
+	function ThemeManager:LoadDefault()
 		local theme = 'ezwin.cc'
-		local content = isfile(self.Folder .. '/themes/default.txt') and readfile(self.Folder .. '/themes/default.txt')
+		local path = self.Folder .. '/themes/default.txt'
+		local hasFile = false
+		pcall(function() hasFile = isfile(path) end)
+		local content = hasFile and readfile(path)
 
 		local isDefault = true
 		if content then
@@ -74,7 +87,10 @@ local ThemeManager = {} do
 	end
 
 	function ThemeManager:SaveDefault(theme)
-		writefile(self.Folder .. '/themes/default.txt', theme)
+		if not theme or theme == '' then return end
+		pcall(function()
+			writefile(self.Folder .. '/themes/default.txt', theme)
+		end)
 	end
 
 	function ThemeManager:CreateThemeManager(groupbox)
@@ -219,9 +235,11 @@ local ThemeManager = {} do
 
 		for i = 1, #paths do
 			local str = paths[i]
-			if not isfolder(str) then
-				makefolder(str)
-			end
+			pcall(function()
+				if not isfolder(str) then
+					makefolder(str)
+				end
+			end)
 		end
 	end
 
