@@ -3813,6 +3813,494 @@ do
         return RenderObj;
     end;
 
+    function Funcs:AddESPPreview(Idx, Info)
+        if type(Idx) == 'table' and Info == nil then
+            Info = Idx;
+            Idx = Info.Idx or ('ESPPreview_' .. tostring(math.random(10000, 99999)));
+        end;
+        Info = Info or {};
+        local Groupbox = self;
+        local Container = Groupbox.Container;
+
+        local Height = Info.Height or 260;
+
+        local Outer = Library:Create('Frame', {
+            BackgroundColor3 = Info.BackgroundColor3 or Color3.fromRGB(14, 14, 18);
+            BorderSizePixel = 0;
+            Size = UDim2.new(1, -4, 0, Height);
+            ZIndex = 5;
+            ClipsDescendants = true;
+            Parent = Container;
+        });
+
+        Library:Create('UICorner', {
+            CornerRadius = UDim.new(0, 6);
+            Parent = Outer;
+        });
+
+        Library:Create('UIStroke', {
+            Color = Color3.fromRGB(38, 38, 46);
+            Thickness = 1;
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+            Parent = Outer;
+        });
+
+        local Viewport = Library:Create('ViewportFrame', {
+            BackgroundTransparency = 1;
+            Size = UDim2.new(1, 0, 1, 0);
+            LightColor = Color3.fromRGB(240, 240, 240);
+            Ambient = Color3.fromRGB(150, 150, 160);
+            LightDirection = Vector3.new(1, -2, -1);
+            ZIndex = 6;
+            Parent = Outer;
+        });
+
+        local World = Instance.new('WorldModel');
+        World.Parent = Viewport;
+
+        local Camera = Instance.new('Camera');
+        Camera.FieldOfView = 50;
+        Camera.Parent = Viewport;
+        Viewport.CurrentCamera = Camera;
+
+        local TargetCenter = Vector3.new(0, 0.2, 0);
+        local Yaw = 0;
+        local Pitch = 0;
+        local Distance = 8.2;
+
+        local function UpdateCamera()
+            local rot = CFrame.Angles(0, Yaw, 0) * CFrame.Angles(Pitch, 0, 0);
+            local camPos = TargetCenter + rot * Vector3.new(0, 0, Distance);
+            Camera.CFrame = CFrame.new(camPos, TargetCenter);
+        end;
+        UpdateCamera();
+
+        local OriginalProps = {};
+        local CurrentModel = nil;
+
+        local function SetupModel(model)
+            if not model then return end;
+            if CurrentModel then
+                CurrentModel:Destroy();
+                table.clear(OriginalProps);
+            end;
+
+            model.Parent = World;
+            CurrentModel = model;
+
+            for _, part in ipairs(model:GetDescendants()) do
+                if part:IsA('BasePart') then
+                    part.Anchored = true;
+                    part.CanCollide = false;
+                    OriginalProps[part] = {
+                        Color = part.Color;
+                        Material = part.Material;
+                        Transparency = part.Transparency;
+                    };
+                end;
+            end;
+
+            -- Orientation: face forward toward camera
+            pcall(function()
+                model:PivotTo(CFrame.new(0, 0, 0) * CFrame.Angles(0, math.pi, 0));
+            end);
+
+            local cf, size = model:GetBoundingBox();
+            TargetCenter = cf.Position;
+            Distance = math.max(size.Y * 1.6, 7.8);
+            UpdateCamera();
+        end;
+
+        local function CloneLocalCharacter()
+            local char = LocalPlayer and LocalPlayer.Character;
+            if not char then return nil end;
+            local oldArch = char.Archivable;
+            char.Archivable = true;
+            local clone = char:Clone();
+            char.Archivable = oldArch;
+
+            for _, desc in ipairs(clone:GetDescendants()) do
+                if desc:IsA('Script') or desc:IsA('LocalScript') or desc:IsA('Sound') then
+                    desc:Destroy();
+                elseif desc:IsA('BasePart') then
+                    desc.Anchored = true;
+                    desc.CanCollide = false;
+                end;
+            end;
+            local hum = clone:FindFirstChildOfClass('Humanoid');
+            if hum then
+                hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
+            end;
+            return clone;
+        end;
+
+        task.spawn(function()
+            local charClone = CloneLocalCharacter();
+            if charClone then
+                SetupModel(charClone);
+            elseif LocalPlayer then
+                local ok, dummy = pcall(function()
+                    return Players:CreateHumanoidModelFromUserId(LocalPlayer.UserId);
+                end);
+                if ok and dummy then
+                    for _, desc in ipairs(dummy:GetDescendants()) do
+                        if desc:IsA('BasePart') then desc.Anchored = true end;
+                    end;
+                    SetupModel(dummy);
+                end;
+            end;
+        end);
+
+        if LocalPlayer then
+            LocalPlayer.CharacterAdded:Connect(function()
+                task.wait(1);
+                local freshClone = CloneLocalCharacter();
+                if freshClone then SetupModel(freshClone) end;
+            end);
+        end;
+
+        -- Mouse & Touch Rotation Controls
+        local Dragging = false;
+        local LastPos = Vector2.new();
+
+        Outer.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.MouseButton2
+                or input.UserInputType == Enum.UserInputType.Touch then
+                Dragging = true;
+                LastPos = Vector2.new(input.Position.X, input.Position.Y);
+            end;
+        end);
+
+        local endSignal = InputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.MouseButton2
+                or input.UserInputType == Enum.UserInputType.Touch then
+                Dragging = false;
+            end;
+        end);
+        Library:GiveSignal(endSignal);
+
+        local changeSignal = InputService.InputChanged:Connect(function(input)
+            if Dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+                or input.UserInputType == Enum.UserInputType.Touch) then
+                local currentPos = Vector2.new(input.Position.X, input.Position.Y);
+                local delta = currentPos - LastPos;
+                LastPos = currentPos;
+
+                Yaw = Yaw - delta.X * 0.015;
+                Pitch = math.clamp(Pitch - delta.Y * 0.01, -0.65, 0.65);
+                UpdateCamera();
+            end;
+        end);
+        Library:GiveSignal(changeSignal);
+
+        Outer.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseWheel then
+                Distance = math.clamp(Distance - input.Position.Z * 0.9, 4.0, 16.0);
+                UpdateCamera();
+            end;
+        end);
+
+        -- ESP Overlay Frame
+        local Overlay = Library:Create('Frame', {
+            BackgroundTransparency = 1;
+            Size = UDim2.new(1, 0, 1, 0);
+            ZIndex = 8;
+            Parent = Outer;
+        });
+
+        local BoxMain = Library:Create('Frame', {
+            BackgroundColor3 = Color3.fromRGB(0, 215, 165);
+            BackgroundTransparency = 0.90;
+            BorderSizePixel = 0;
+            AnchorPoint = Vector2.new(0.5, 0.5);
+            Position = UDim2.new(0.5, 0, 0.5, 0);
+            Size = UDim2.new(0, 108, 0, 186);
+            ZIndex = 8;
+            Parent = Overlay;
+        });
+
+        local BoxStrokeMain = Library:Create('UIStroke', {
+            Color = Color3.fromRGB(0, 215, 165);
+            Thickness = 1.2;
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+            Parent = BoxMain;
+        });
+
+        local BoxInnerBorder = Library:Create('Frame', {
+            BackgroundTransparency = 1;
+            BorderSizePixel = 0;
+            Position = UDim2.new(0, 1, 0, 1);
+            Size = UDim2.new(1, -2, 1, -2);
+            ZIndex = 8;
+            Parent = BoxMain;
+        });
+
+        Library:Create('UIStroke', {
+            Color = Color3.new(0, 0, 0);
+            Thickness = 1;
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+            Parent = BoxInnerBorder;
+        });
+
+        local BoxOuterBorder = Library:Create('Frame', {
+            BackgroundTransparency = 1;
+            BorderSizePixel = 0;
+            Position = UDim2.new(0, -1, 0, -1);
+            Size = UDim2.new(1, 2, 1, 2);
+            ZIndex = 8;
+            Parent = BoxMain;
+        });
+
+        Library:Create('UIStroke', {
+            Color = Color3.new(0, 0, 0);
+            Thickness = 1;
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+            Parent = BoxOuterBorder;
+        });
+
+        local HealthBarBg = Library:Create('Frame', {
+            BackgroundColor3 = Color3.fromRGB(12, 12, 14);
+            BorderSizePixel = 0;
+            Position = UDim2.new(0, -7, 0, 0);
+            Size = UDim2.new(0, 3, 1, 0);
+            ZIndex = 9;
+            Parent = BoxMain;
+        });
+
+        Library:Create('UIStroke', {
+            Color = Color3.new(0, 0, 0);
+            Thickness = 1;
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+            Parent = HealthBarBg;
+        });
+
+        local HealthBarFill = Library:Create('Frame', {
+            BackgroundColor3 = Color3.fromRGB(0, 255, 120);
+            BorderSizePixel = 0;
+            AnchorPoint = Vector2.new(0, 1);
+            Position = UDim2.new(0, 0, 1, 0);
+            Size = UDim2.new(1, 0, 1, 0);
+            ZIndex = 10;
+            Parent = HealthBarBg;
+        });
+
+        local HealthText = Library:CreateLabel({
+            AnchorPoint = Vector2.new(1, 0);
+            Position = UDim2.new(0, -3, 0, -2);
+            Size = UDim2.new(0, 24, 0, 12);
+            Text = '100';
+            TextSize = 9;
+            TextColor3 = Color3.fromRGB(240, 240, 240);
+            TextXAlignment = Enum.TextXAlignment.Right;
+            TextStrokeTransparency = 0;
+            TextStrokeColor3 = Color3.new(0, 0, 0);
+            ZIndex = 10;
+            Parent = HealthBarBg;
+        });
+
+        local NameTag = Library:CreateLabel({
+            AnchorPoint = Vector2.new(0.5, 1);
+            Position = UDim2.new(0.5, 0, 0, -5);
+            Size = UDim2.new(1, 60, 0, 14);
+            Text = (LocalPlayer and LocalPlayer.DisplayName) or 'LocalPlayer';
+            TextSize = 11;
+            TextColor3 = Color3.fromRGB(255, 255, 255);
+            TextStrokeTransparency = 0;
+            TextStrokeColor3 = Color3.new(0, 0, 0);
+            ZIndex = 10;
+            Parent = BoxMain;
+        });
+
+        local WeaponTag = Library:CreateLabel({
+            AnchorPoint = Vector2.new(0.5, 0);
+            Position = UDim2.new(0.5, 0, 1, 4);
+            Size = UDim2.new(1, 60, 0, 13);
+            Text = 'Assault Rifle';
+            TextSize = 10;
+            TextColor3 = Color3.fromRGB(220, 220, 230);
+            TextStrokeTransparency = 0;
+            TextStrokeColor3 = Color3.new(0, 0, 0);
+            ZIndex = 10;
+            Parent = BoxMain;
+        });
+
+        local DistanceTag = Library:CreateLabel({
+            AnchorPoint = Vector2.new(0.5, 0);
+            Position = UDim2.new(0.5, 0, 1, 17);
+            Size = UDim2.new(1, 60, 0, 12);
+            Text = '18m';
+            TextSize = 9;
+            TextColor3 = Color3.fromRGB(175, 175, 190);
+            TextStrokeTransparency = 0;
+            TextStrokeColor3 = Color3.new(0, 0, 0);
+            Visible = false;
+            ZIndex = 10;
+            Parent = BoxMain;
+        });
+
+        local FlagsHolder = Library:Create('Frame', {
+            BackgroundTransparency = 1;
+            Position = UDim2.new(1, 6, 0, 0);
+            Size = UDim2.new(0, 50, 1, 0);
+            ZIndex = 10;
+            Parent = BoxMain;
+        });
+
+        Library:Create('UIListLayout', {
+            FillDirection = Enum.FillDirection.Vertical;
+            SortOrder = Enum.SortOrder.LayoutOrder;
+            Padding = UDim.new(0, 2);
+            Parent = FlagsHolder;
+        });
+
+        local FlagLabels = {};
+        for _, flag in ipairs({ { Key = 'Armor', Text = 'ARMOR', Color = Color3.fromRGB(90, 190, 255) }, { Key = 'Scoped', Text = 'SCOPED', Color = Color3.fromRGB(120, 240, 140) }, { Key = 'VIP', Text = 'VIP', Color = Color3.fromRGB(255, 215, 0) } }) do
+            local fl = Library:CreateLabel({
+                Size = UDim2.new(1, 0, 0, 11);
+                Text = flag.Text;
+                TextSize = 9;
+                TextColor3 = flag.Color;
+                TextStrokeTransparency = 0;
+                TextStrokeColor3 = Color3.new(0, 0, 0);
+                TextXAlignment = Enum.TextXAlignment.Left;
+                ZIndex = 10;
+                Parent = FlagsHolder;
+            });
+            FlagLabels[flag.Key] = fl;
+        end;
+
+        local ResetBtn = Library:Create('TextButton', {
+            AnchorPoint = Vector2.new(1, 0);
+            Position = UDim2.new(1, -8, 0, 8);
+            Size = UDim2.new(0, 24, 0, 24);
+            BackgroundColor3 = Color3.fromRGB(24, 24, 30);
+            Text = '⟲';
+            TextColor3 = Color3.fromRGB(200, 200, 210);
+            TextSize = 14;
+            ZIndex = 12;
+            Parent = Outer;
+        });
+
+        Library:Create('UICorner', {
+            CornerRadius = UDim.new(0, 4);
+            Parent = ResetBtn;
+        });
+
+        Library:Create('UIStroke', {
+            Color = Color3.fromRGB(48, 48, 56);
+            Thickness = 1;
+            Parent = ResetBtn;
+        });
+
+        ResetBtn.MouseButton1Click:Connect(function()
+            Yaw = 0;
+            Pitch = 0;
+            Distance = 8.2;
+            UpdateCamera();
+        end);
+
+        Library:AddToolTip('Reset 3D camera angle', ResetBtn);
+
+        local HintLabel = Library:CreateLabel({
+            AnchorPoint = Vector2.new(0, 1);
+            Position = UDim2.new(0, 8, 1, -6);
+            Size = UDim2.new(1, -16, 0, 12);
+            Text = '🖱️ Drag to rotate • 🔍 Scroll to zoom';
+            TextSize = 10;
+            TextColor3 = Color3.fromRGB(130, 130, 145);
+            TextXAlignment = Enum.TextXAlignment.Left;
+            ZIndex = 11;
+            Parent = Outer;
+        });
+
+        local ESPPreviewObj = {
+            Outer = Outer;
+            Viewport = Viewport;
+            World = World;
+            Camera = Camera;
+            BoxMain = BoxMain;
+            BoxStrokeMain = BoxStrokeMain;
+            HealthBarBg = HealthBarBg;
+            HealthBarFill = HealthBarFill;
+            HealthText = HealthText;
+            NameTag = NameTag;
+            WeaponTag = WeaponTag;
+            DistanceTag = DistanceTag;
+            FlagsHolder = FlagsHolder;
+            FlagLabels = FlagLabels;
+        };
+
+        function ESPPreviewObj:SetBox(visible, color)
+            BoxMain.Visible = (visible ~= false);
+            if color then
+                BoxStrokeMain.Color = color;
+                BoxMain.BackgroundColor3 = color;
+            end;
+        end;
+
+        function ESPPreviewObj:SetName(visible, color, text)
+            NameTag.Visible = (visible ~= false);
+            if color then NameTag.TextColor3 = color end;
+            if text then NameTag.Text = text end;
+        end;
+
+        function ESPPreviewObj:SetHealth(visible, hp, color)
+            HealthBarBg.Visible = (visible ~= false);
+            if hp then
+                local pct = math.clamp(hp / 100, 0, 1);
+                HealthBarFill.Size = UDim2.new(1, 0, pct, 0);
+                HealthText.Text = tostring(math.floor(hp));
+            end;
+            if color then HealthBarFill.BackgroundColor3 = color end;
+        end;
+
+        function ESPPreviewObj:SetWeapon(visible, text)
+            WeaponTag.Visible = (visible ~= false);
+            if text then WeaponTag.Text = text end;
+        end;
+
+        function ESPPreviewObj:SetDistance(visible, text)
+            DistanceTag.Visible = (visible ~= false);
+            if text then DistanceTag.Text = text end;
+        end;
+
+        function ESPPreviewObj:SetChams(enabled, color, transparency, material)
+            if not CurrentModel then return end;
+            for part, orig in pairs(OriginalProps) do
+                if part and part.Parent then
+                    if enabled then
+                        part.Color = color or Color3.fromRGB(168, 255, 0);
+                        part.Material = material or Enum.Material.Neon;
+                        part.Transparency = transparency or 0.35;
+                    else
+                        part.Color = orig.Color;
+                        part.Material = orig.Material;
+                        part.Transparency = orig.Transparency;
+                    end;
+                end;
+            end;
+        end;
+
+        function ESPPreviewObj:ResetCamera()
+            Yaw = 0;
+            Pitch = 0;
+            Distance = 8.2;
+            UpdateCamera();
+        end;
+
+        function ESPPreviewObj:SetModel(newModel)
+            SetupModel(newModel);
+        end;
+
+        Groupbox:AddBlank(Info.BlankSize or 5);
+        Groupbox:Resize();
+
+        Options[Idx] = ESPPreviewObj;
+        return ESPPreviewObj;
+    end;
+
     BaseGroupbox.__index = Funcs;
     BaseGroupbox.__namecall = function(Table, Key, ...)
         return Funcs[Key](...);
