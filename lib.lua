@@ -163,7 +163,57 @@ local Library = {
         shirt = 'rbxassetid://7734056672',
     };
     ShowCustomCursor = false;
+
+    -- URL logo par défaut (ezwin.cc branding)
+    DefaultLogoUrl = 'rbxassetid://7734053495';
 };
+
+-- ===========================================================
+-- Library:GetCustomAsset(rawImage)
+--   Résout une image brute en une URL rbxassetid:// utilisable
+--   dans les ImageLabel Roblox.
+--   Supporte :
+--     • Nombre  → rbxassetid://<number>
+--     • "1234"  → rbxassetid://1234
+--     • "rbxasset..." → retourné tel quel
+--     • URL HTTP → tentative via getcustomasset / game:HttpGet
+--     • Fallback → retourne '' (image vide)
+-- ===========================================================
+function Library:GetCustomAsset(rawImage)
+    if not rawImage or rawImage == '' then return '' end;
+
+    -- Numéro direct (number ou string numérique)
+    if type(rawImage) == 'number' then
+        return 'rbxassetid://' .. tostring(rawImage);
+    end;
+    if type(rawImage) == 'string' then
+        if rawImage:match('^%d+$') then
+            return 'rbxassetid://' .. rawImage;
+        end;
+        -- Déjà un asset rbx valide
+        if rawImage:match('^rbxasset') or rawImage:match('^rbxthumb') or rawImage:match('^rbxgame') then
+            return rawImage;
+        end;
+        -- URL HTTP/HTTPS → on essaie getcustomasset (syn, krnl…), sinon HttpGet
+        if rawImage:match('^https?://') then
+            -- getcustomasset : charge l'image localement
+            local gca = getcustomasset or (syn and syn.getcustomasset);
+            if gca then
+                local ok, res = pcall(gca, rawImage);
+                if ok and res and res ~= '' then return res end;
+            end;
+            -- Fallback HttpGet (contenu brut → généralement pas utilisable comme image)
+            local ok2, res2 = pcall(function()
+                return game:HttpGet(rawImage, true);
+            end);
+            if ok2 and res2 and res2 ~= '' then return res2 end;
+        end;
+    end;
+    return '';
+end;
+
+-- Logo URL helper
+Library.DefaultLogoUrl = Library.DefaultLogoUrl or 'rbxassetid://7734053495';
 
 local RainbowStep = 0
 local Hue = 0
@@ -3965,56 +4015,56 @@ do
             UpdateCamera();
         end;
 
+        -- Helper: strip all animation state from a model to give it a clean T-pose
+        local function StripAndTPose(model)
+            -- First destroy all animation drivers so no new poses are applied
+            for _, desc in ipairs(model:GetDescendants()) do
+                if desc:IsA('Script') or desc:IsA('LocalScript') or desc:IsA('Sound')
+                    or desc:IsA('Animator') or desc:IsA('AnimationController') then
+                    desc:Destroy();
+                elseif desc:IsA('BasePart') then
+                    desc.Anchored = true;
+                    desc.CanCollide = false;
+                    desc.Velocity = Vector3.zero;
+                    desc.RotVelocity = Vector3.zero;
+                end;
+            end;
+            -- Reset Motor6D Transform to CFrame.new() = identity (T-pose).
+            -- Transform is the runtime animation offset applied on top of C0/C1.
+            -- Clearing it removes the "current animation frame" pose from the model.
+            for _, desc in ipairs(model:GetDescendants()) do
+                if desc:IsA('Motor6D') then
+                    pcall(function() desc.Transform = CFrame.new(); end);
+                end;
+            end;
+            local hum = model:FindFirstChildOfClass('Humanoid');
+            if hum then
+                hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
+                hum.PlatformStand = true;
+            end;
+        end;
+
         local function CreateStaticPreviewDummy()
-            -- 1. Tenter de charger un mannequin standard propre via CreateHumanoidModelFromUserId
+            -- 1. Charger un mannequin propre via CreateHumanoidModelFromUserId
             if LocalPlayer and LocalPlayer.UserId then
                 local ok, dummy = pcall(function()
                     return Players:CreateHumanoidModelFromUserId(LocalPlayer.UserId);
                 end);
                 if ok and dummy then
-                    for _, desc in ipairs(dummy:GetDescendants()) do
-                        if desc:IsA('Script') or desc:IsA('LocalScript') or desc:IsA('Sound') or desc:IsA('Animator') or desc:IsA('AnimationController') then
-                            desc:Destroy();
-                        elseif desc:IsA('BasePart') then
-                            desc.Anchored = true;
-                            desc.CanCollide = false;
-                            desc.Velocity = Vector3.zero;
-                            desc.RotVelocity = Vector3.zero;
-                        end;
-                    end;
-                    local hum = dummy:FindFirstChildOfClass('Humanoid');
-                    if hum then
-                        hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
-                        hum.PlatformStand = true;
-                    end;
+                    StripAndTPose(dummy);
                     return dummy;
                 end;
             end;
 
-            -- 2. Fallback clone du personnage en supprimant les animateurs et scripts
+            -- 2. Fallback clone du personnage — on clone PUIS on T-pose
             local char = LocalPlayer and LocalPlayer.Character;
             if char then
                 local oldArch = char.Archivable;
                 char.Archivable = true;
                 local clone = char:Clone();
                 char.Archivable = oldArch;
-
                 if clone then
-                    for _, desc in ipairs(clone:GetDescendants()) do
-                        if desc:IsA('Script') or desc:IsA('LocalScript') or desc:IsA('Sound') or desc:IsA('Animator') or desc:IsA('AnimationController') then
-                            desc:Destroy();
-                        elseif desc:IsA('BasePart') then
-                            desc.Anchored = true;
-                            desc.CanCollide = false;
-                            desc.Velocity = Vector3.zero;
-                            desc.RotVelocity = Vector3.zero;
-                        end;
-                    end;
-                    local hum = clone:FindFirstChildOfClass('Humanoid');
-                    if hum then
-                        hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
-                        hum.PlatformStand = true;
-                    end;
+                    StripAndTPose(clone);
                     return clone;
                 end;
             end;
