@@ -6046,7 +6046,6 @@ function Library:CreateWindow(...)
 
     Library:MakeDraggable(Outer, Outer, 35);
     Library:MakeDraggable(Outer, BorderLayer, 35);
-    Library:MakeDraggable(Outer, MainContent, 35);
     Library:MakeDraggable(Outer, TopAccent, 35);
     Library:MakeDraggable(Outer, TopTitleBar, 35);
 
@@ -6417,7 +6416,7 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0, 8, 0, 8);
             Size = UDim2.new(0.5, -12, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            ScrollBarThickness = 4;
+            ScrollBarThickness = 6;
             ScrollBarImageColor3 = Library.AccentColor;
             TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
             BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
@@ -6435,7 +6434,7 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0.5, 4, 0, 8);
             Size = UDim2.new(0.5, -12, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            ScrollBarThickness = 4;
+            ScrollBarThickness = 6;
             ScrollBarImageColor3 = Library.AccentColor;
             TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
             BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
@@ -6453,7 +6452,7 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0, 8, 0, 8);
             Size = UDim2.new(1, -16, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            ScrollBarThickness = 4;
+            ScrollBarThickness = 6;
             ScrollBarImageColor3 = Library.AccentColor;
             TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
             BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
@@ -6461,9 +6460,25 @@ function Library:CreateWindow(...)
             ScrollingDirection = Enum.ScrollingDirection.Y;
             Selectable = false;
             Active = true;
+            Visible = false;
             ZIndex = 2;
             Parent = TabFrame;
         });
+
+        Library:AddToRegistry(LeftSide, {
+            ScrollBarImageColor3 = 'AccentColor';
+        });
+        Library:AddToRegistry(RightSide, {
+            ScrollBarImageColor3 = 'AccentColor';
+        });
+        Library:AddToRegistry(FullSide, {
+            ScrollBarImageColor3 = 'AccentColor';
+        });
+
+        Tab.LeftSide = LeftSide;
+        Tab.RightSide = RightSide;
+        Tab.FullSide = FullSide;
+        Tab.TabFrame = TabFrame;
 
         Library:Create('UIListLayout', {
             Padding = UDim.new(0, 10);
@@ -6535,6 +6550,16 @@ function Library:CreateWindow(...)
             TabIndicator.Visible = true;
             TabFrame.Visible = true;
 
+            if Tab.IsFull then
+                FullSide.Visible = true;
+                LeftSide.Visible = false;
+                RightSide.Visible = false;
+            else
+                LeftSide.Visible = true;
+                RightSide.Visible = true;
+                FullSide.Visible = false;
+            end;
+
             for _, Groupbox in next, Tab.Groupboxes do
                 if Groupbox.Resize then Groupbox:Resize(); end;
             end;
@@ -6581,7 +6606,18 @@ function Library:CreateWindow(...)
                 boxName = Info;
             end;
 
-            local parentSide = isFull and FullSide or (isLeft and LeftSide or RightSide);
+            local parentSide = LeftSide;
+            if isFull then
+                Tab.IsFull = true;
+                FullSide.Visible = true;
+                LeftSide.Visible = false;
+                RightSide.Visible = false;
+                parentSide = FullSide;
+            elseif isLeft then
+                parentSide = LeftSide;
+            else
+                parentSide = RightSide;
+            end;
 
             local BoxOuter = Library:Create('Frame', {
                 BackgroundColor3 = Library.BackgroundColor;
@@ -6742,6 +6778,13 @@ function Library:CreateWindow(...)
                 ZIndex = 2;
                 Parent = parentSide;
             });
+
+            if isFull then
+                Tab.IsFull = true;
+                FullSide.Visible = true;
+                LeftSide.Visible = false;
+                RightSide.Visible = false;
+            end;
 
             Library:Create('UICorner', {
                 CornerRadius = UDim.new(0, 5);
@@ -7171,6 +7214,102 @@ function Library:CreateWindow(...)
 
     if Config.AutoShow then task.spawn(Library.Toggle) end
 
+    -- Support universel du défilement à la molette de la souris (Mouse Wheel Scrolling)
+    local function SmoothScroll(frame, wheelDelta)
+        if not frame or not frame.Visible then return false end;
+
+        local maxCanvasY = frame.CanvasSize.Y.Offset;
+        if maxCanvasY <= 0 and frame.AbsoluteCanvasSize then
+            maxCanvasY = frame.AbsoluteCanvasSize.Y;
+        end;
+
+        local visibleH = frame.AbsoluteSize.Y;
+        local maxScroll = math.max(0, maxCanvasY - visibleH);
+        if maxScroll <= 0 then return false end;
+
+        local scrollStep = 50;
+        local currentY = frame.CanvasPosition.Y;
+        local targetY = math.clamp(currentY - wheelDelta * scrollStep, 0, maxScroll);
+
+        frame.CanvasPosition = Vector2.new(frame.CanvasPosition.X, targetY);
+        return true;
+    end;
+
+    Library:GiveSignal(InputService.InputChanged:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.MouseWheel then return end;
+        if not Library.IsOpen or not Outer.Visible then return end;
+
+        local mouseX = Mouse.X;
+        local mouseY = Mouse.Y;
+        local wheelDelta = input.Position.Z;
+
+        -- 1. Si un popup (dropdown, colorpicker) est ouvert
+        if Library:MouseIsOverOpenedFrame(mouseX, mouseY) then
+            for frame, _ in next, Library.OpenedFrames do
+                if Library:IsMouseOverFrame(frame, mouseX, mouseY) then
+                    local scrollChild = frame:FindFirstChildOfClass('ScrollingFrame') or frame:FindFirstChildWhichIsA('ScrollingFrame', true);
+                    if scrollChild and SmoothScroll(scrollChild, wheelDelta) then
+                        return;
+                    end;
+                end;
+            end;
+            return;
+        end;
+
+        -- 2. Si la souris est sur la barre latérale des onglets (TopTabArea)
+        if Library:IsMouseOverFrame(TopTabArea, mouseX, mouseY) then
+            if SmoothScroll(TopTabArea, wheelDelta) then
+                return;
+            end;
+        end;
+
+        -- 3. Si la souris est dans le conteneur principal des onglets (TabContainer)
+        if Library:IsMouseOverFrame(TabContainer, mouseX, mouseY) then
+            local activeTab = Window.ActiveTab;
+            if not activeTab then return end;
+
+            -- 3a. Vérifier d'abord s'il y a un ScrollingFrame imbriqué sous la souris (ex: listes de skin changer)
+            if activeTab.TabFrame then
+                for _, desc in ipairs(activeTab.TabFrame:GetDescendants()) do
+                    if desc:IsA('ScrollingFrame') and desc ~= activeTab.LeftSide and desc ~= activeTab.RightSide and desc ~= activeTab.FullSide and desc.Visible then
+                        if Library:IsMouseOverFrame(desc, mouseX, mouseY) then
+                            if SmoothScroll(desc, wheelDelta) then
+                                return;
+                            end;
+                        end;
+                    end;
+                end;
+            end;
+
+            -- 3b. Si le tab utilise FullSide
+            if activeTab.FullSide and activeTab.FullSide.Visible then
+                SmoothScroll(activeTab.FullSide, wheelDelta);
+                return;
+            end;
+
+            -- 3c. Tab avec colonnes Gauche / Droite (ex: Settings, ESP, Aimbot, etc.)
+            local left = activeTab.LeftSide;
+            local right = activeTab.RightSide;
+
+            if right and Library:IsMouseOverFrame(right, mouseX, mouseY) then
+                SmoothScroll(right, wheelDelta);
+                return;
+            elseif left and Library:IsMouseOverFrame(left, mouseX, mouseY) then
+                SmoothScroll(left, wheelDelta);
+                return;
+            end;
+
+            -- Fallback selon la moitié horizontale du TabContainer
+            if right and left then
+                local splitX = right.AbsolutePosition.X;
+                if mouseX >= splitX then
+                    SmoothScroll(right, wheelDelta);
+                else
+                    SmoothScroll(left, wheelDelta);
+                end;
+            end;
+        end;
+    end));
 
     Window.ThemeManager = ThemeManager;
     Window.SaveManager = SaveManager;
