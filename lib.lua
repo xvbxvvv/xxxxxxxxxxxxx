@@ -2952,6 +2952,8 @@ do
             Dropdown:BuildDropdownList();
         end;
 
+        Dropdown.Refresh = Dropdown.SetValues;
+
         function Dropdown:OpenDropdown()
             local TargetH = GetTargetDropdownHeight();
             local OpensUpward = RecalculateListPosition(TargetH);
@@ -3871,10 +3873,13 @@ do
         local Pitch = 0;
         local Distance = 8.2;
 
+        local UpdateSkeleton;
+
         local function UpdateCamera()
             local rot = CFrame.Angles(0, Yaw, 0) * CFrame.Angles(Pitch, 0, 0);
             local camPos = TargetCenter + rot * Vector3.new(0, 0, Distance);
             Camera.CFrame = CFrame.new(camPos, TargetCenter);
+            if UpdateSkeleton then UpdateSkeleton() end;
         end;
         UpdateCamera();
 
@@ -4005,6 +4010,32 @@ do
             end;
         end);
 
+        -- 3D Projector to convert WorldModel coordinates to Viewport pixel space
+        local function ProjectToViewport(worldPos)
+            local obj = Camera.CFrame:PointToObjectSpace(worldPos);
+            local z = -obj.Z;
+            if z <= 0.1 then return Vector2.new(-1000, -1000), false end;
+
+            local absW = Viewport.AbsoluteSize.X;
+            local absH = Viewport.AbsoluteSize.Y;
+            if absW <= 10 or absH <= 10 then
+                absW = Outer.AbsoluteSize.X;
+                absH = Height;
+            end;
+            if absW <= 10 then absW = 220 end;
+            if absH <= 10 then absH = Height or 260 end;
+
+            local aspect = absW / absH;
+            local tanHalfFov = math.tan(math.rad(Camera.FieldOfView) / 2);
+            local normX = obj.X / (z * tanHalfFov * aspect);
+            local normY = obj.Y / (z * tanHalfFov);
+
+            local px = (normX * 0.5 + 0.5) * absW;
+            local py = (-normY * 0.5 + 0.5) * absH;
+            local onScreen = (normX >= -1.2 and normX <= 1.2 and normY >= -1.2 and normY <= 1.2);
+            return Vector2.new(px, py), onScreen;
+        end;
+
         -- ESP Overlay Frame
         local Overlay = Library:Create('Frame', {
             BackgroundTransparency = 1;
@@ -4013,19 +4044,118 @@ do
             Parent = Outer;
         });
 
+        -- Dynamic 3D Skeleton Wireframe Overlay
+        local SkeletonContainer = Library:Create('Frame', {
+            BackgroundTransparency = 1;
+            Size = UDim2.new(1, 0, 1, 0);
+            ZIndex = 8;
+            Parent = Overlay;
+        });
+
+        local BoneLines = {};
+        local SkeletonEnabled = true;
+        local SkeletonColor = Color3.fromRGB(255, 255, 255);
+
+        local R15_Bones = {
+            { 'Head', 'UpperTorso' },
+            { 'UpperTorso', 'LowerTorso' },
+            { 'UpperTorso', 'LeftUpperArm' },
+            { 'LeftUpperArm', 'LeftLowerArm' },
+            { 'LeftLowerArm', 'LeftHand' },
+            { 'UpperTorso', 'RightUpperArm' },
+            { 'RightUpperArm', 'RightLowerArm' },
+            { 'RightLowerArm', 'RightHand' },
+            { 'LowerTorso', 'LeftUpperLeg' },
+            { 'LeftUpperLeg', 'LeftLowerLeg' },
+            { 'LeftLowerLeg', 'LeftFoot' },
+            { 'LowerTorso', 'RightUpperLeg' },
+            { 'RightUpperLeg', 'RightLowerLeg' },
+            { 'RightLowerLeg', 'RightFoot' },
+        };
+
+        local R6_Bones = {
+            { 'Head', 'Torso' },
+            { 'Torso', 'Left Arm' },
+            { 'Torso', 'Right Arm' },
+            { 'Torso', 'Left Leg' },
+            { 'Torso', 'Right Leg' },
+        };
+
+        UpdateSkeleton = function()
+            if not SkeletonEnabled or not CurrentModel then
+                for _, line in pairs(BoneLines) do
+                    line.Visible = false;
+                end;
+                return;
+            end;
+
+            local isR15 = CurrentModel:FindFirstChild('UpperTorso') ~= nil;
+            local boneDefs = isR15 and R15_Bones or R6_Bones;
+
+            for idx, pair in ipairs(boneDefs) do
+                local p1 = CurrentModel:FindFirstChild(pair[1]);
+                local p2 = CurrentModel:FindFirstChild(pair[2]);
+                local line = BoneLines[idx];
+                if not line then
+                    line = Library:Create('Frame', {
+                        BackgroundColor3 = SkeletonColor;
+                        BorderSizePixel = 0;
+                        AnchorPoint = Vector2.new(0.5, 0.5);
+                        ZIndex = 8;
+                        Parent = SkeletonContainer;
+                    });
+                    Library:Create('UIStroke', {
+                        Color = Color3.new(0, 0, 0);
+                        Thickness = 0.5;
+                        Parent = line;
+                    });
+                    BoneLines[idx] = line;
+                end;
+
+                if p1 and p2 then
+                    local v1, on1 = ProjectToViewport(p1.Position);
+                    local v2, on2 = ProjectToViewport(p2.Position);
+
+                    if on1 and on2 then
+                        local dx = v2.X - v1.X;
+                        local dy = v2.Y - v1.Y;
+                        local dist = math.sqrt(dx * dx + dy * dy);
+                        local angle = math.deg(math.atan2(dy, dx));
+                        local midX = (v1.X + v2.X) / 2;
+                        local midY = (v1.Y + v2.Y) / 2;
+
+                        line.Size = UDim2.new(0, dist, 0, 1.5);
+                        line.Position = UDim2.new(0, midX, 0, midY);
+                        line.Rotation = angle;
+                        line.BackgroundColor3 = SkeletonColor;
+                        line.Visible = true;
+                    else
+                        line.Visible = false;
+                    end;
+                else
+                    line.Visible = false;
+                end;
+            end;
+
+            for i = #boneDefs + 1, #BoneLines do
+                if BoneLines[i] then BoneLines[i].Visible = false end;
+            end;
+        end;
+
+        -- Bounding Box (Supports Full Box, Corner Box, and Fill)
         local BoxMain = Library:Create('Frame', {
-            BackgroundColor3 = Color3.fromRGB(0, 215, 165);
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255);
             BackgroundTransparency = 0.90;
             BorderSizePixel = 0;
             AnchorPoint = Vector2.new(0.5, 0.5);
             Position = UDim2.new(0.5, 0, 0.5, 0);
             Size = UDim2.new(0, 108, 0, 186);
-            ZIndex = 8;
+            ZIndex = 9;
             Parent = Overlay;
         });
 
         local BoxStrokeMain = Library:Create('UIStroke', {
-            Color = Color3.fromRGB(0, 215, 165);
+            Color = Color3.fromRGB(255, 255, 255);
             Thickness = 1.2;
             ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
             Parent = BoxMain;
@@ -4036,11 +4166,11 @@ do
             BorderSizePixel = 0;
             Position = UDim2.new(0, 1, 0, 1);
             Size = UDim2.new(1, -2, 1, -2);
-            ZIndex = 8;
+            ZIndex = 9;
             Parent = BoxMain;
         });
 
-        Library:Create('UIStroke', {
+        local InnerStroke = Library:Create('UIStroke', {
             Color = Color3.new(0, 0, 0);
             Thickness = 1;
             ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
@@ -4052,23 +4182,72 @@ do
             BorderSizePixel = 0;
             Position = UDim2.new(0, -1, 0, -1);
             Size = UDim2.new(1, 2, 1, 2);
-            ZIndex = 8;
+            ZIndex = 9;
             Parent = BoxMain;
         });
 
-        Library:Create('UIStroke', {
+        local OuterStroke = Library:Create('UIStroke', {
             Color = Color3.new(0, 0, 0);
             Thickness = 1;
             ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
             Parent = BoxOuterBorder;
         });
 
+        -- Corner Box Frames
+        local CornerHolder = Library:Create('Frame', {
+            BackgroundTransparency = 1;
+            Size = UDim2.new(1, 0, 1, 0);
+            Visible = false;
+            ZIndex = 9;
+            Parent = BoxMain;
+        });
+
+        local CornerFrames = {};
+        local cornerLen = 14;
+        local cornerThick = 1.5;
+
+        local function CreateCornerLine(anchor, pos, size)
+            local f = Library:Create('Frame', {
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+                BorderSizePixel = 0;
+                AnchorPoint = anchor;
+                Position = pos;
+                Size = size;
+                ZIndex = 9;
+                Parent = CornerHolder;
+            });
+            Library:Create('UIStroke', {
+                Color = Color3.new(0, 0, 0);
+                Thickness = 0.6;
+                Parent = f;
+            });
+            table.insert(CornerFrames, f);
+            return f;
+        end;
+
+        -- Top-Left Corner
+        CreateCornerLine(Vector2.new(0, 0), UDim2.new(0, 0, 0, 0), UDim2.new(0, cornerLen, 0, cornerThick));
+        CreateCornerLine(Vector2.new(0, 0), UDim2.new(0, 0, 0, 0), UDim2.new(0, cornerThick, 0, cornerLen));
+
+        -- Top-Right Corner
+        CreateCornerLine(Vector2.new(1, 0), UDim2.new(1, 0, 0, 0), UDim2.new(0, cornerLen, 0, cornerThick));
+        CreateCornerLine(Vector2.new(1, 0), UDim2.new(1, 0, 0, 0), UDim2.new(0, cornerThick, 0, cornerLen));
+
+        -- Bottom-Left Corner
+        CreateCornerLine(Vector2.new(0, 1), UDim2.new(0, 0, 1, 0), UDim2.new(0, cornerLen, 0, cornerThick));
+        CreateCornerLine(Vector2.new(0, 1), UDim2.new(0, 0, 1, 0), UDim2.new(0, cornerThick, 0, cornerLen));
+
+        -- Bottom-Right Corner
+        CreateCornerLine(Vector2.new(1, 1), UDim2.new(1, 0, 1, 0), UDim2.new(0, cornerLen, 0, cornerThick));
+        CreateCornerLine(Vector2.new(1, 1), UDim2.new(1, 0, 1, 0), UDim2.new(0, cornerThick, 0, cornerLen));
+
+        -- Health Bar (Left of Box)
         local HealthBarBg = Library:Create('Frame', {
             BackgroundColor3 = Color3.fromRGB(12, 12, 14);
             BorderSizePixel = 0;
             Position = UDim2.new(0, -7, 0, 0);
             Size = UDim2.new(0, 3, 1, 0);
-            ZIndex = 9;
+            ZIndex = 10;
             Parent = BoxMain;
         });
 
@@ -4085,7 +4264,7 @@ do
             AnchorPoint = Vector2.new(0, 1);
             Position = UDim2.new(0, 0, 1, 0);
             Size = UDim2.new(1, 0, 1, 0);
-            ZIndex = 10;
+            ZIndex = 11;
             Parent = HealthBarBg;
         });
 
@@ -4099,10 +4278,52 @@ do
             TextXAlignment = Enum.TextXAlignment.Right;
             TextStrokeTransparency = 0;
             TextStrokeColor3 = Color3.new(0, 0, 0);
-            ZIndex = 10;
+            ZIndex = 11;
             Parent = HealthBarBg;
         });
 
+        -- Ammo Bar (Bottom of Box)
+        local AmmoBarBg = Library:Create('Frame', {
+            BackgroundColor3 = Color3.fromRGB(12, 12, 14);
+            BorderSizePixel = 0;
+            Position = UDim2.new(0, 0, 1, 2);
+            Size = UDim2.new(1, 0, 0, 2.5);
+            ZIndex = 10;
+            Visible = false;
+            Parent = BoxMain;
+        });
+
+        Library:Create('UIStroke', {
+            Color = Color3.new(0, 0, 0);
+            Thickness = 1;
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+            Parent = AmmoBarBg;
+        });
+
+        local AmmoBarFill = Library:Create('Frame', {
+            BackgroundColor3 = Color3.fromRGB(80, 140, 255);
+            BorderSizePixel = 0;
+            Position = UDim2.new(0, 0, 0, 0);
+            Size = UDim2.new(1, 0, 1, 0);
+            ZIndex = 11;
+            Parent = AmmoBarBg;
+        });
+
+        local AmmoText = Library:CreateLabel({
+            AnchorPoint = Vector2.new(1, 0);
+            Position = UDim2.new(1, 28, 0, -3);
+            Size = UDim2.new(0, 24, 0, 10);
+            Text = '30';
+            TextSize = 8;
+            TextColor3 = Color3.fromRGB(200, 220, 255);
+            TextStrokeTransparency = 0;
+            TextStrokeColor3 = Color3.new(0, 0, 0);
+            Visible = false;
+            ZIndex = 11;
+            Parent = AmmoBarBg;
+        });
+
+        -- Name Tag
         local NameTag = Library:CreateLabel({
             AnchorPoint = Vector2.new(0.5, 1);
             Position = UDim2.new(0.5, 0, 0, -5);
@@ -4112,10 +4333,11 @@ do
             TextColor3 = Color3.fromRGB(255, 255, 255);
             TextStrokeTransparency = 0;
             TextStrokeColor3 = Color3.new(0, 0, 0);
-            ZIndex = 10;
+            ZIndex = 11;
             Parent = BoxMain;
         });
 
+        -- Weapon Tag
         local WeaponTag = Library:CreateLabel({
             AnchorPoint = Vector2.new(0.5, 0);
             Position = UDim2.new(0.5, 0, 1, 4);
@@ -4125,10 +4347,11 @@ do
             TextColor3 = Color3.fromRGB(220, 220, 230);
             TextStrokeTransparency = 0;
             TextStrokeColor3 = Color3.new(0, 0, 0);
-            ZIndex = 10;
+            ZIndex = 11;
             Parent = BoxMain;
         });
 
+        -- Distance Tag
         local DistanceTag = Library:CreateLabel({
             AnchorPoint = Vector2.new(0.5, 0);
             Position = UDim2.new(0.5, 0, 1, 17);
@@ -4139,15 +4362,16 @@ do
             TextStrokeTransparency = 0;
             TextStrokeColor3 = Color3.new(0, 0, 0);
             Visible = false;
-            ZIndex = 10;
+            ZIndex = 11;
             Parent = BoxMain;
         });
 
+        -- Flags Holder (Right of Box)
         local FlagsHolder = Library:Create('Frame', {
             BackgroundTransparency = 1;
             Position = UDim2.new(1, 6, 0, 0);
             Size = UDim2.new(0, 50, 1, 0);
-            ZIndex = 10;
+            ZIndex = 11;
             Parent = BoxMain;
         });
 
@@ -4159,7 +4383,13 @@ do
         });
 
         local FlagLabels = {};
-        for _, flag in ipairs({ { Key = 'Armor', Text = 'ARMOR', Color = Color3.fromRGB(90, 190, 255) }, { Key = 'Scoped', Text = 'SCOPED', Color = Color3.fromRGB(120, 240, 140) }, { Key = 'VIP', Text = 'VIP', Color = Color3.fromRGB(255, 215, 0) } }) do
+        for _, flag in ipairs({
+            { Key = 'Armor', Text = 'ARMOR', Color = Color3.fromRGB(90, 190, 255) },
+            { Key = 'Scoped', Text = 'SCOPED', Color = Color3.fromRGB(120, 240, 140) },
+            { Key = 'VIP', Text = 'VIP', Color = Color3.fromRGB(255, 215, 0) },
+            { Key = 'Flashed', Text = 'FLASHED', Color = Color3.fromRGB(255, 170, 0) },
+            { Key = 'Reload', Text = 'RELOAD', Color = Color3.fromRGB(255, 80, 80) },
+        }) do
             local fl = Library:CreateLabel({
                 Size = UDim2.new(1, 0, 0, 11);
                 Text = flag.Text;
@@ -4168,7 +4398,7 @@ do
                 TextStrokeTransparency = 0;
                 TextStrokeColor3 = Color3.new(0, 0, 0);
                 TextXAlignment = Enum.TextXAlignment.Left;
-                ZIndex = 10;
+                ZIndex = 11;
                 Parent = FlagsHolder;
             });
             FlagLabels[flag.Key] = fl;
@@ -4225,22 +4455,56 @@ do
             Camera = Camera;
             BoxMain = BoxMain;
             BoxStrokeMain = BoxStrokeMain;
+            CornerHolder = CornerHolder;
+            CornerFrames = CornerFrames;
             HealthBarBg = HealthBarBg;
             HealthBarFill = HealthBarFill;
             HealthText = HealthText;
+            AmmoBarBg = AmmoBarBg;
+            AmmoBarFill = AmmoBarFill;
+            AmmoText = AmmoText;
             NameTag = NameTag;
             WeaponTag = WeaponTag;
             DistanceTag = DistanceTag;
             FlagsHolder = FlagsHolder;
             FlagLabels = FlagLabels;
+            SkeletonContainer = SkeletonContainer;
         };
 
-        function ESPPreviewObj:SetBox(visible, color)
+        function ESPPreviewObj:SetBox(visible, color, style)
             BoxMain.Visible = (visible ~= false);
             if color then
                 BoxStrokeMain.Color = color;
-                BoxMain.BackgroundColor3 = color;
+                for _, cl in ipairs(CornerFrames) do
+                    cl.BackgroundColor3 = color;
+                end;
             end;
+            if style then
+                ESPPreviewObj:SetBoxStyle(style);
+            end;
+        end;
+
+        function ESPPreviewObj:SetBoxStyle(style)
+            local isCorner = (style == 'Corner');
+            BoxStrokeMain.Enabled = not isCorner;
+            InnerStroke.Enabled = not isCorner;
+            OuterStroke.Enabled = not isCorner;
+            CornerHolder.Visible = isCorner;
+        end;
+
+        function ESPPreviewObj:SetBoxFill(visible, color, transparency)
+            if visible then
+                BoxMain.BackgroundTransparency = transparency or 0.85;
+                if color then BoxMain.BackgroundColor3 = color end;
+            else
+                BoxMain.BackgroundTransparency = 1;
+            end;
+        end;
+
+        function ESPPreviewObj:SetSkeleton(visible, color)
+            SkeletonEnabled = (visible ~= false);
+            if color then SkeletonColor = color end;
+            UpdateSkeleton();
         end;
 
         function ESPPreviewObj:SetName(visible, color, text)
@@ -4249,24 +4513,62 @@ do
             if text then NameTag.Text = text end;
         end;
 
-        function ESPPreviewObj:SetHealth(visible, hp, color)
+        function ESPPreviewObj:SetHealth(visible, hp, showNumber, color)
             HealthBarBg.Visible = (visible ~= false);
-            if hp then
-                local pct = math.clamp(hp / 100, 0, 1);
-                HealthBarFill.Size = UDim2.new(1, 0, pct, 0);
-                HealthText.Text = tostring(math.floor(hp));
+            hp = hp or 100;
+            local pct = math.clamp(hp / 100, 0, 1);
+            HealthBarFill.Size = UDim2.new(1, 0, pct, 0);
+            HealthText.Visible = (showNumber ~= false);
+            HealthText.Text = tostring(math.floor(hp));
+            if color then
+                HealthBarFill.BackgroundColor3 = color;
+            else
+                if hp >= 75 then
+                    HealthBarFill.BackgroundColor3 = Color3.fromRGB(0, 255, 120);
+                elseif hp >= 40 then
+                    HealthBarFill.BackgroundColor3 = Color3.fromRGB(240, 200, 40);
+                else
+                    HealthBarFill.BackgroundColor3 = Color3.fromRGB(255, 60, 60);
+                end;
             end;
-            if color then HealthBarFill.BackgroundColor3 = color end;
         end;
 
-        function ESPPreviewObj:SetWeapon(visible, text)
+        function ESPPreviewObj:SetWeapon(visible, color, text)
             WeaponTag.Visible = (visible ~= false);
+            if color then WeaponTag.TextColor3 = color end;
             if text then WeaponTag.Text = text end;
         end;
 
-        function ESPPreviewObj:SetDistance(visible, text)
+        function ESPPreviewObj:SetAmmo(visible, pct, color, text)
+            AmmoBarBg.Visible = (visible ~= false);
+            if pct then AmmoBarFill.Size = UDim2.new(math.clamp(pct, 0, 1), 0, 1, 0) end;
+            if color then AmmoBarFill.BackgroundColor3 = color end;
+            if text then
+                AmmoText.Text = text;
+                AmmoText.Visible = true;
+            end;
+            if AmmoBarBg.Visible then
+                WeaponTag.Position = UDim2.new(0.5, 0, 1, 7);
+                DistanceTag.Position = UDim2.new(0.5, 0, 1, 20);
+            else
+                WeaponTag.Position = UDim2.new(0.5, 0, 1, 4);
+                DistanceTag.Position = UDim2.new(0.5, 0, 1, 17);
+            end;
+        end;
+
+        function ESPPreviewObj:SetDistance(visible, color, text)
             DistanceTag.Visible = (visible ~= false);
+            if color then DistanceTag.TextColor3 = color end;
             if text then DistanceTag.Text = text end;
+        end;
+
+        function ESPPreviewObj:SetFlags(visible, flagsList)
+            FlagsHolder.Visible = (visible ~= false);
+            if flagsList and type(flagsList) == 'table' then
+                for key, lbl in pairs(FlagLabels) do
+                    lbl.Visible = (flagsList[key] == true);
+                end;
+            end;
         end;
 
         function ESPPreviewObj:SetChams(enabled, color, transparency, material)
@@ -4274,7 +4576,7 @@ do
             for part, orig in pairs(OriginalProps) do
                 if part and part.Parent then
                     if enabled then
-                        part.Color = color or Color3.fromRGB(168, 255, 0);
+                        part.Color = color or Color3.fromRGB(255, 255, 255);
                         part.Material = material or Enum.Material.Neon;
                         part.Transparency = transparency or 0.35;
                     else
@@ -5839,7 +6141,7 @@ function Library:CreateWindow(...)
 
         local lowerName = Name:lower();
         local lowerIcon = type(Icon) == 'string' and Icon:lower() or '';
-        local isBottom = (lowerName == 'settings' or lowerName == 'configs' or lowerName == 'config' or lowerName == 'ui settings' or lowerIcon == 'settings' or lowerIcon == 'gear' or lowerIcon == 'wrench');
+        local isBottom = (lowerName == 'settings' or lowerName == 'configs' or lowerName == 'config' or lowerName == 'ui settings' or lowerIcon == 'settings');
         local targetParent = isBottom and BottomTabArea or TopTabArea;
 
         local TabButton = Library:Create('ImageButton', {
