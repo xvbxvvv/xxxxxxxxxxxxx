@@ -5950,6 +5950,24 @@ function Library:CreateWindow(...)
         BackgroundColor3 = 'BackgroundColor';
     });
 
+
+    local BottomTabArea = Library:Create('Frame', {
+        BackgroundTransparency = 1;
+        Position = UDim2.new(0, 0, 1, -112);
+        Size = UDim2.new(1, 0, 0, 52);
+        ZIndex = 4;
+        Parent = SidebarOuter;
+    });
+
+    local BottomTabLayout = Library:Create('UIListLayout', {
+        FillDirection = Enum.FillDirection.Vertical;
+        HorizontalAlignment = Enum.HorizontalAlignment.Center;
+        VerticalAlignment = Enum.VerticalAlignment.Bottom;
+        SortOrder = Enum.SortOrder.LayoutOrder;
+        Padding = UDim.new(0, 6);
+        Parent = BottomTabArea;
+    });
+
     local TopTabArea = Library:Create('ScrollingFrame', {
         BackgroundTransparency = 1;
         BorderSizePixel = 0;
@@ -5972,21 +5990,24 @@ function Library:CreateWindow(...)
         Parent = TopTabArea;
     });
 
-    local BottomTabArea = Library:Create('Frame', {
-        BackgroundTransparency = 1;
-        Position = UDim2.new(0, 0, 1, -112);
-        Size = UDim2.new(1, 0, 0, 52);
-        ZIndex = 4;
-        Parent = SidebarOuter;
-    });
+    local function UpdateSidebarLayout()
+        local badgeH = 58;
+        local countBottom = 0;
+        for _, child in next, BottomTabArea:GetChildren() do
+            if child:IsA('GuiButton') or child:IsA('Frame') then
+                countBottom = countBottom + 1;
+            end;
+        end;
 
-    Library:Create('UIListLayout', {
-        FillDirection = Enum.FillDirection.Vertical;
-        HorizontalAlignment = Enum.HorizontalAlignment.Center;
-        VerticalAlignment = Enum.VerticalAlignment.Center;
-        SortOrder = Enum.SortOrder.LayoutOrder;
-        Parent = BottomTabArea;
-    });
+        local bottomH = countBottom > 0 and (countBottom * 42 + math.max(0, countBottom - 1) * 6 + 6) or 0;
+        BottomTabArea.Size = UDim2.new(1, 0, 0, bottomH);
+        BottomTabArea.Position = UDim2.new(0, 0, 1, -(badgeH + bottomH + 4));
+
+        local totalReserved = badgeH + bottomH + 18;
+        TopTabArea.Size = UDim2.new(1, 0, 1, -totalReserved);
+    end;
+
+    BottomTabLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(UpdateSidebarLayout);
 
     -- Profile Badge at bottom of sidebar
     -- Badge tall enough for avatar + two text lines
@@ -6122,11 +6143,40 @@ function Library:CreateWindow(...)
 
     -- TabContainer must not be draggable to allow child ScrollingFrames to scroll properly
 
-    function Window:AddTab(Name, Icon)
+    function Window:SelectTab(TabTarget)
+        if type(TabTarget) == 'string' then
+            for Name, TabObj in next, Window.Tabs do
+                if Name:lower() == TabTarget:lower() then
+                    TabObj:ShowTab();
+                    return TabObj;
+                end;
+            end;
+        elseif type(TabTarget) == 'table' and TabTarget.ShowTab then
+            TabTarget:ShowTab();
+            return TabTarget;
+        elseif type(TabTarget) == 'number' and Window.TabsList and Window.TabsList[TabTarget] then
+            Window.TabsList[TabTarget]:ShowTab();
+            return Window.TabsList[TabTarget];
+        end;
+    end;
+
+    function Window:AddTab(...)
         local Tab = {
             Groupboxes = {};
             Tabboxes = {};
         };
+
+        local Name, Icon, TabConfig
+        local firstArg = ...
+        if type(firstArg) == 'table' then
+            TabConfig = firstArg
+            Name = TabConfig.Name or TabConfig.Title or 'Tab'
+            Icon = TabConfig.Icon
+        else
+            Name = select(1, ...) or 'Tab'
+            Icon = select(2, ...)
+            TabConfig = select(3, ...) or {}
+        end
 
         local ResolvedIcon = Icon;
         if type(ResolvedIcon) == 'number' then
@@ -6141,11 +6191,18 @@ function Library:CreateWindow(...)
 
         local lowerName = Name:lower();
         local lowerIcon = type(Icon) == 'string' and Icon:lower() or '';
-        local isBottom = (lowerName == 'settings' or lowerName == 'configs' or lowerName == 'config' or lowerName == 'ui settings' or lowerIcon == 'settings');
+        local isBottom = false
+        if type(TabConfig) == 'table' and (TabConfig.Position == 'Bottom' or TabConfig.Bottom == true or TabConfig.Side == 'Bottom') then
+            isBottom = true
+        else
+            isBottom = (lowerName == 'settings' or lowerName == 'configs' or lowerName == 'config' or lowerName == 'ui settings' or lowerIcon == 'settings');
+        end
         local targetParent = isBottom and BottomTabArea or TopTabArea;
 
         local TabButton = Library:Create('ImageButton', {
+            BackgroundColor3 = Color3.fromRGB(24, 24, 28);
             BackgroundTransparency = 1;
+            BorderSizePixel = 0;
             Size = UDim2.new(0, 42, 0, 42);
             Image = ResolvedIcon;
             ImageColor3 = Color3.fromRGB(120, 120, 130);
@@ -6159,17 +6216,38 @@ function Library:CreateWindow(...)
             Parent = TabButton;
         });
 
+        local TabIndicator = Library:Create('Frame', {
+            BackgroundColor3 = Library.AccentColor;
+            BorderSizePixel = 0;
+            Position = UDim2.new(0, 1, 0.5, -8);
+            Size = UDim2.new(0, 2, 0, 16);
+            Visible = false;
+            ZIndex = 6;
+            Parent = TabButton;
+        });
+
+        Library:Create('UICorner', {
+            CornerRadius = UDim.new(1, 0);
+            Parent = TabIndicator;
+        });
+
+        Library:AddToRegistry(TabIndicator, {
+            BackgroundColor3 = 'AccentColor';
+        });
+
         Library:AddToolTip(Name, TabButton);
 
         TabButton.MouseEnter:Connect(function()
-            if TabButton.ImageColor3 ~= Color3.fromRGB(255, 255, 255) then
-                TabButton.ImageColor3 = Color3.fromRGB(180, 180, 180);
+            if Window.ActiveTab ~= Tab then
+                TabButton.ImageColor3 = Color3.fromRGB(190, 190, 195);
+                TabButton.BackgroundTransparency = 0.6;
             end;
         end);
 
         TabButton.MouseLeave:Connect(function()
-            if TabButton.ImageColor3 ~= Color3.fromRGB(255, 255, 255) then
+            if Window.ActiveTab ~= Tab then
                 TabButton.ImageColor3 = Color3.fromRGB(120, 120, 130);
+                TabButton.BackgroundTransparency = 1;
             end;
         end);
 
@@ -6289,7 +6367,7 @@ function Library:CreateWindow(...)
             local layout = Side:WaitForChild('UIListLayout');
             local function UpdateCanvas()
                 local contentH = layout.AbsoluteContentSize.Y;
-                Side.CanvasSize = UDim2.fromOffset(0, contentH + 24);
+                Side.CanvasSize = UDim2.fromOffset(0, contentH + 28);
             end;
             layout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(UpdateCanvas);
             Side:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateCanvas);
@@ -6301,17 +6379,39 @@ function Library:CreateWindow(...)
                 t:HideTab();
             end;
 
+            Window.ActiveTab = Tab;
             TabButton.ImageColor3 = Color3.fromRGB(255, 255, 255);
+            TabButton.BackgroundTransparency = 0.45;
+            TabIndicator.Visible = true;
             TabFrame.Visible = true;
+
+            for _, Groupbox in next, Tab.Groupboxes do
+                if Groupbox.Resize then Groupbox:Resize(); end;
+            end;
+            for _, Tabbox in next, Tab.Tabboxes do
+                for _, SubTab in next, Tabbox.Tabs do
+                    if SubTab.Resize then SubTab:Resize(); end;
+                end;
+            end;
         end;
 
         function Tab:HideTab()
             TabButton.ImageColor3 = Color3.fromRGB(120, 120, 130);
+            TabButton.BackgroundTransparency = 1;
+            TabIndicator.Visible = false;
             TabFrame.Visible = false;
         end;
 
-        TabButton.MouseButton1Click:Connect(function()
+        local function OnTabButtonClicked()
+            if Library:MouseIsOverOpenedFrame() then return end;
             Tab:ShowTab();
+        end;
+
+        TabButton.MouseButton1Click:Connect(OnTabButtonClicked);
+        TabButton.InputBegan:Connect(function(Input)
+            if (Input.UserInputType == Enum.UserInputType.Touch) and not Library:MouseIsOverOpenedFrame() then
+                Tab:ShowTab();
+            end;
         end);
 
         function Tab:AddGroupbox(Info)
@@ -6427,12 +6527,7 @@ function Library:CreateWindow(...)
                     end;
                 end;
 
-                if isFull then
-                    local minH = (parentSide.AbsoluteSize.Y > 50) and (parentSide.AbsoluteSize.Y - 8) or 380;
-                    BoxOuter.Size = UDim2.new(1, 0, 0, math.max(minH, contentHeight + 22));
-                else
-                    BoxOuter.Size = UDim2.new(1, 0, 0, contentHeight + 22);
-                end;
+                BoxOuter.Size = UDim2.new(1, 0, 0, contentHeight + 22);
             end;
 
             local cLayout = Container:FindFirstChildOfClass('UIListLayout');
@@ -6468,6 +6563,7 @@ function Library:CreateWindow(...)
         function Tab:AddTabbox(Info)
             local Tabbox = {
                 Tabs = {};
+                ActiveTab = nil;
             };
 
             local isFull = false;
@@ -6559,8 +6655,24 @@ function Library:CreateWindow(...)
                 Parent = TabboxButtons;
             });
 
+            local function RefreshTabboxButtonWidths()
+                local count = 0;
+                for _, btn in next, TabboxButtons:GetChildren() do
+                    if not btn:IsA('UIListLayout') then
+                        count = count + 1;
+                    end;
+                end;
+                if count > 0 then
+                    for _, btn in next, TabboxButtons:GetChildren() do
+                        if not btn:IsA('UIListLayout') then
+                            btn.Size = UDim2.new(1 / count, 0, 1, 0);
+                        end;
+                    end;
+                end;
+            end;
+
             function Tabbox:AddTab(Name)
-                local Tab = {};
+                local SubTab = {};
 
                 local Button = Library:Create('Frame', {
                     BackgroundColor3 = Library.MainColor;
@@ -6607,18 +6719,19 @@ function Library:CreateWindow(...)
                     Parent = BoxInner;
                 });
 
-                Library:Create('UIListLayout', {
+                local subLayout = Library:Create('UIListLayout', {
                     FillDirection = Enum.FillDirection.Vertical;
                     SortOrder = Enum.SortOrder.LayoutOrder;
                     Padding = UDim.new(0, 4);
                     Parent = Container;
                 });
 
-                function Tab:Show()
-                    for _, Tab in next, Tabbox.Tabs do
-                        Tab:Hide();
+                function SubTab:Show()
+                    for _, otherTab in next, Tabbox.Tabs do
+                        otherTab:Hide();
                     end;
 
+                    Tabbox.ActiveTab = SubTab;
                     Container.Visible = true;
                     ActiveIndicator.Visible = true;
 
@@ -6626,10 +6739,10 @@ function Library:CreateWindow(...)
                     ButtonLabel.TextColor3 = Color3.fromRGB(255, 255, 255);
                     Library.RegistryMap[Button].Properties.BackgroundColor3 = 'BackgroundColor';
 
-                    Tab:Resize();
+                    SubTab:Resize();
                 end;
 
-                function Tab:Hide()
+                function SubTab:Hide()
                     Container.Visible = false;
                     ActiveIndicator.Visible = false;
 
@@ -6638,38 +6751,32 @@ function Library:CreateWindow(...)
                     Library.RegistryMap[Button].Properties.BackgroundColor3 = 'MainColor';
                 end;
 
-                function Tab:Resize()
-                    local TabCount = 0;
-
-                    for _, Tab in next, Tabbox.Tabs do
-                        TabCount = TabCount + 1;
-                    end;
-
-                    for _, Button in next, TabboxButtons:GetChildren() do
-                        if not Button:IsA('UIListLayout') then
-                            Button.Size = UDim2.new(1 / TabCount, 0, 1, 0);
-                        end;
-                    end;
+                function SubTab:Resize()
+                    RefreshTabboxButtonWidths();
 
                     if (not Container.Visible) then
                         return;
                     end;
 
-                    local Size = 0;
-
-                    for _, Element in next, Tab.Container:GetChildren() do
-                        if (not Element:IsA('UIListLayout')) and Element.Visible then
-                            Size = Size + Element.Size.Y.Offset;
+                    local contentHeight = 0;
+                    if subLayout and subLayout.AbsoluteContentSize.Y > 0 then
+                        contentHeight = subLayout.AbsoluteContentSize.Y;
+                    else
+                        for _, Element in next, Container:GetChildren() do
+                            if (not Element:IsA('UIListLayout')) and Element.Visible then
+                                contentHeight = contentHeight + Element.Size.Y.Offset;
+                            end;
                         end;
                     end;
 
-                    if isFull then
-                        local minH = (parentSide.AbsoluteSize.Y > 50) and (parentSide.AbsoluteSize.Y - 8) or 380;
-                        BoxOuter.Size = UDim2.new(1, 0, 0, math.max(minH, 40 + Size + 14));
-                    else
-                        BoxOuter.Size = UDim2.new(1, 0, 0, 40 + Size + 10);
-                    end;
+                    BoxOuter.Size = UDim2.new(1, 0, 0, 42 + contentHeight + 10);
                 end;
+
+                subLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(function()
+                    if Container.Visible then
+                        SubTab:Resize();
+                    end;
+                end);
 
                 Button.MouseEnter:Connect(function()
                     if not Container.Visible then
@@ -6687,25 +6794,25 @@ function Library:CreateWindow(...)
 
                 Button.InputBegan:Connect(function(Input)
                     if (Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch) and not Library:MouseIsOverOpenedFrame() then
-                        Tab:Show();
-                        Tab:Resize();
+                        SubTab:Show();
                     end;
                 end);
 
-                Tab.Container = Container;
-                Tabbox.Tabs[Name] = Tab;
+                SubTab.Container = Container;
+                Tabbox.Tabs[Name] = SubTab;
 
-                setmetatable(Tab, BaseGroupbox);
+                setmetatable(SubTab, BaseGroupbox);
 
-                Tab:AddBlank(3);
-                Tab:Resize();
+                SubTab:AddBlank(3);
+                RefreshTabboxButtonWidths();
+                SubTab:Resize();
 
-                -- Show first tab (number is 2 cus of the UIListLayout that also sits in that instance)
-                if #TabboxButtons:GetChildren() == 2 then
-                    Tab:Show();
+                -- Show the first added tab by default
+                if Tabbox.ActiveTab == nil then
+                    SubTab:Show();
                 end;
 
-                return Tab;
+                return SubTab;
             end;
 
             Tab.Tabboxes[tabboxName] = Tabbox;
@@ -6725,18 +6832,17 @@ function Library:CreateWindow(...)
             return Tab:AddTabbox({ Name = Name, Side = 'Full'; });
         end;
 
-        TabButton.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-                Tab:ShowTab();
-            end;
-        end);
+        Window.TabsList = Window.TabsList or {};
+        table.insert(Window.TabsList, Tab);
+        Window.Tabs[Name] = Tab;
 
-        -- This was the first tab added, so we show it by default.
-        if #TabContainer:GetChildren() == 1 then
+        UpdateSidebarLayout();
+
+        -- Show first added tab by default
+        if Window.ActiveTab == nil then
             Tab:ShowTab();
         end;
 
-        Window.Tabs[Name] = Tab;
         return Tab;
     end;
 
@@ -6918,19 +7024,29 @@ function Library:CreateWindow(...)
     Window.SaveManager = SaveManager;
 
     function Window:CreateSettingsTab(SettingsConfig)
+        if Window.SettingsTab then
+            return Window.SettingsTab;
+        end;
+
         SettingsConfig = SettingsConfig or {};
         local TabName = SettingsConfig.Title or SettingsConfig.Name or 'Settings';
         local TabIcon = SettingsConfig.Icon or 'settings';
 
-        local SettingsTab = Window:AddTab(TabName, TabIcon);
+        local SettingsTab = Window:AddTab({
+            Name = TabName,
+            Icon = TabIcon,
+            Position = 'Bottom',
+        });
         Window.SettingsTab = SettingsTab;
+
+        -- Dossier unifié de sauvegarde
+        local folder = SettingsConfig.Folder or Config.Folder or Config.SettingsFolder or 'gamesense';
+        local configFolder = SettingsConfig.ConfigFolder or Config.ConfigFolder or folder .. '/configs';
 
         -- 1. Thèmes (côté GAUCHE - groupe entier dédié)
         pcall(function()
             ThemeManager:SetLibrary(Library);
-            if SettingsConfig.Folder then
-                ThemeManager:SetFolder(SettingsConfig.Folder);
-            end;
+            ThemeManager:SetFolder(folder);
             ThemeManager:ApplyToTab(SettingsTab);
         end);
 
@@ -6942,9 +7058,7 @@ function Library:CreateWindow(...)
                 'SaveManager_ConfigList', 'SaveManager_ConfigName', 'SaveManager_AutoLoadToggle',
                 'MenuKeybind', 'KeybindMenuOpen', 'ShowWatermark', 'ShowCustomCursor', 'NotificationSide'
             });
-            if SettingsConfig.ConfigFolder or SettingsConfig.Folder then
-                SaveManager:SetFolder(SettingsConfig.ConfigFolder or SettingsConfig.Folder);
-            end;
+            SaveManager:SetFolder(configFolder);
             SaveManager:BuildConfigSection(SettingsTab);
         end);
 
@@ -6995,7 +7109,7 @@ function Library:CreateWindow(...)
         MenuBox:AddDivider();
 
         MenuBox:AddLabel('Menu Keybind'):AddKeyPicker('MenuKeybind', {
-            Default = SettingsConfig.DefaultKeybind or 'RightShift',
+            Default = SettingsConfig.DefaultKeybind or Config.DefaultKeybind or 'RightShift',
             NoUI = true,
             Mode = 'Toggle',
             Text = 'Menu keybind',
@@ -7022,17 +7136,21 @@ function Library:CreateWindow(...)
     if Config.Folder then
         pcall(function()
             ThemeManager:SetFolder(Config.Folder);
-            SaveManager:SetFolder(Config.Folder);
+            SaveManager:SetFolder(Config.ConfigFolder or (Config.Folder .. '/configs'));
         end);
     end;
 
-    -- Auto creation du tab Settings si configuré (AutoSettings = true ou table)
-    if Config.AutoSettings ~= false and (Config.AutoSettings or Config.AutoSetting or Config.SettingsTab) then
-        Window:CreateSettingsTab(type(Config.AutoSettings) == 'table' and Config.AutoSettings or {
-            Folder = Config.Folder or Config.SettingsFolder,
-            ConfigFolder = Config.ConfigFolder,
-            DefaultKeybind = Config.DefaultKeybind,
-        });
+    -- Auto-création du tab Settings par défaut (désactivable via AutoSettings = false)
+    if Config.AutoSettings ~= false then
+        task.defer(function()
+            if not Window.SettingsTab then
+                Window:CreateSettingsTab(type(Config.AutoSettings) == 'table' and Config.AutoSettings or {
+                    Folder = Config.Folder or Config.SettingsFolder,
+                    ConfigFolder = Config.ConfigFolder,
+                    DefaultKeybind = Config.DefaultKeybind,
+                });
+            end;
+        end);
     end;
 
     Window.Holder = Outer;
