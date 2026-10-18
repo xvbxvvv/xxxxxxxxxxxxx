@@ -3479,6 +3479,38 @@ do
         return Stats;
     end;
 
+    local function SafeApplyImage(imageLabel, rawImage)
+        if not imageLabel or not imageLabel.Parent then return end;
+        if not rawImage or rawImage == '' then
+            imageLabel.Image = '';
+            return;
+        end;
+
+        if type(rawImage) == 'number' then
+            imageLabel.Image = 'rbxassetid://' .. tostring(rawImage);
+            return;
+        end;
+
+        if type(rawImage) == 'string' then
+            if rawImage:match('^%d+$') then
+                imageLabel.Image = 'rbxassetid://' .. rawImage;
+                return;
+            end;
+            if rawImage:find('^rbxasset') then
+                imageLabel.Image = rawImage;
+                return;
+            end;
+
+            -- URL HTTP/HTTPS ou fichier custom
+            task.spawn(function()
+                local resolved = Library:GetCustomAsset(rawImage);
+                if resolved and resolved ~= '' and imageLabel and imageLabel.Parent then
+                    imageLabel.Image = resolved;
+                end;
+            end);
+        end;
+    end;
+
     function Funcs:AddImage(Idx, Info)
         if type(Idx) == 'table' and Info == nil then
             Info = Idx;
@@ -3529,12 +3561,14 @@ do
             BackgroundTransparency = 1;
             Position = HasTitle and UDim2.new(0, 8, 0, 24) or UDim2.new(0, 8, 0, 8);
             Size = HasTitle and UDim2.new(1, -16, 1, -30) or UDim2.new(1, -16, 1, -16);
-            Image = Info.Image or '';
+            Image = '';
             ScaleType = Info.ScaleType or Enum.ScaleType.Fit;
             ImageColor3 = Info.ImageColor3 or Color3.new(1, 1, 1);
             ZIndex = 6;
             Parent = CardOuter;
         });
+
+        SafeApplyImage(ImageBox, Info.Image);
 
         if Info.AspectRatio then
             Library:Create('UIAspectRatioConstraint', {
@@ -3552,10 +3586,7 @@ do
         };
 
         function ImageObj:SetImage(newImg)
-            if type(newImg) == 'number' then
-                newImg = 'rbxassetid://' .. tostring(newImg);
-            end;
-            ImageBox.Image = newImg or '';
+            SafeApplyImage(ImageBox, newImg);
         end;
 
         function ImageObj:SetTitle(newTitle)
@@ -3661,12 +3692,14 @@ do
                 BackgroundTransparency = 1;
                 Position = HasSubTitle and UDim2.new(0, 6, 0, 20) or UDim2.new(0, 6, 0, 6);
                 Size = HasSubTitle and UDim2.new(1, -12, 1, -24) or UDim2.new(1, -12, 1, -12);
-                Image = itemData.Image or '';
+                Image = '';
                 ScaleType = itemData.ScaleType or Enum.ScaleType.Fit;
                 ImageColor3 = itemData.ImageColor3 or Color3.new(1, 1, 1);
                 ZIndex = 7;
                 Parent = SubCard;
             });
+
+            SafeApplyImage(SubImg, itemData.Image);
 
             local cardRef = {
                 Card = SubCard;
@@ -3675,10 +3708,7 @@ do
             };
 
             function cardRef:SetImage(newImg)
-                if type(newImg) == 'number' then
-                    newImg = 'rbxassetid://' .. tostring(newImg);
-                end;
-                SubImg.Image = newImg or '';
+                SafeApplyImage(SubImg, newImg);
             end;
 
             function cardRef:SetTitle(newTitle)
@@ -3908,6 +3938,22 @@ do
                 end;
             end;
 
+            -- Pose statique neutre par défaut (T-pose / Neutral stand)
+            local root = model:FindFirstChild('HumanoidRootPart') or model:FindFirstChild('Torso') or model.PrimaryPart;
+            if root then
+                model.PrimaryPart = root;
+                root.CFrame = CFrame.new(0, 0, 0);
+            end;
+
+            -- Normaliser l'orientation des membres pour avoir un mannequin propre et fixe
+            pcall(function()
+                for _, motor in ipairs(model:GetDescendants()) do
+                    if motor:IsA('Motor6D') then
+                        motor.Transform = CFrame.new();
+                    end;
+                end;
+            end);
+
             -- Orientation: face forward toward camera
             pcall(function()
                 model:PivotTo(CFrame.new(0, 0, 0) * CFrame.Angles(0, math.pi, 0));
@@ -3919,53 +3965,69 @@ do
             UpdateCamera();
         end;
 
-        local function CloneLocalCharacter()
-            local char = LocalPlayer and LocalPlayer.Character;
-            if not char then return nil end;
-            local oldArch = char.Archivable;
-            char.Archivable = true;
-            local clone = char:Clone();
-            char.Archivable = oldArch;
-
-            for _, desc in ipairs(clone:GetDescendants()) do
-                if desc:IsA('Script') or desc:IsA('LocalScript') or desc:IsA('Sound') then
-                    desc:Destroy();
-                elseif desc:IsA('BasePart') then
-                    desc.Anchored = true;
-                    desc.CanCollide = false;
-                end;
-            end;
-            local hum = clone:FindFirstChildOfClass('Humanoid');
-            if hum then
-                hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
-            end;
-            return clone;
-        end;
-
-        task.spawn(function()
-            local charClone = CloneLocalCharacter();
-            if charClone then
-                SetupModel(charClone);
-            elseif LocalPlayer then
+        local function CreateStaticPreviewDummy()
+            -- 1. Tenter de charger un mannequin standard propre via CreateHumanoidModelFromUserId
+            if LocalPlayer and LocalPlayer.UserId then
                 local ok, dummy = pcall(function()
                     return Players:CreateHumanoidModelFromUserId(LocalPlayer.UserId);
                 end);
                 if ok and dummy then
                     for _, desc in ipairs(dummy:GetDescendants()) do
-                        if desc:IsA('BasePart') then desc.Anchored = true end;
+                        if desc:IsA('Script') or desc:IsA('LocalScript') or desc:IsA('Sound') or desc:IsA('Animator') or desc:IsA('AnimationController') then
+                            desc:Destroy();
+                        elseif desc:IsA('BasePart') then
+                            desc.Anchored = true;
+                            desc.CanCollide = false;
+                            desc.Velocity = Vector3.zero;
+                            desc.RotVelocity = Vector3.zero;
+                        end;
                     end;
-                    SetupModel(dummy);
+                    local hum = dummy:FindFirstChildOfClass('Humanoid');
+                    if hum then
+                        hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
+                        hum.PlatformStand = true;
+                    end;
+                    return dummy;
                 end;
             end;
-        end);
 
-        if LocalPlayer then
-            LocalPlayer.CharacterAdded:Connect(function()
-                task.wait(1);
-                local freshClone = CloneLocalCharacter();
-                if freshClone then SetupModel(freshClone) end;
-            end);
+            -- 2. Fallback clone du personnage en supprimant les animateurs et scripts
+            local char = LocalPlayer and LocalPlayer.Character;
+            if char then
+                local oldArch = char.Archivable;
+                char.Archivable = true;
+                local clone = char:Clone();
+                char.Archivable = oldArch;
+
+                if clone then
+                    for _, desc in ipairs(clone:GetDescendants()) do
+                        if desc:IsA('Script') or desc:IsA('LocalScript') or desc:IsA('Sound') or desc:IsA('Animator') or desc:IsA('AnimationController') then
+                            desc:Destroy();
+                        elseif desc:IsA('BasePart') then
+                            desc.Anchored = true;
+                            desc.CanCollide = false;
+                            desc.Velocity = Vector3.zero;
+                            desc.RotVelocity = Vector3.zero;
+                        end;
+                    end;
+                    local hum = clone:FindFirstChildOfClass('Humanoid');
+                    if hum then
+                        hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
+                        hum.PlatformStand = true;
+                    end;
+                    return clone;
+                end;
+            end;
+
+            return nil;
         end;
+
+        task.spawn(function()
+            local dummy = CreateStaticPreviewDummy();
+            if dummy then
+                SetupModel(dummy);
+            end;
+        end);
 
         -- Mouse & Touch Rotation Controls
         local Dragging = false;
@@ -4775,7 +4837,16 @@ Library.DefaultLogoUrl = 'https://github.com/xvbxvvv/logo/blob/main/0fb782bd-42a
 
 function Library:GetCustomAsset(url, filename)
     if not url or url == '' then return '' end
-    if url:find('^rbxasset') then return url end
+    if type(url) == 'number' then
+        return 'rbxassetid://' .. tostring(url)
+    end
+    if type(url) ~= 'string' then return '' end
+    if url:match('^%d+$') then
+        return 'rbxassetid://' .. url
+    end
+    if url:find('^rbxasset') then
+        return url
+    end
 
     local user, repo, branch, file = url:match('github%.com/([^/]+)/([^/]+)/blob/([^/]+)/([^%?]+)')
     local rawUrl = url
@@ -4783,25 +4854,33 @@ function Library:GetCustomAsset(url, filename)
         rawUrl = string.format('https://raw.githubusercontent.com/%s/%s/%s/%s', user, repo, branch, file)
     end
 
-    filename = filename or 'gamesense_custom_asset.jpg'
+    if not filename then
+        local ext = url:match('%.([a-zA-Z0-9]+)%??') or 'png'
+        local cleanHash = 0
+        for i = 1, #url do
+            cleanHash = (cleanHash * 31 + string.byte(url, i)) % 2147483647
+        end
+        filename = string.format('gamesense_asset_%d.%s', cleanHash, ext)
+    end
 
     local customAssetFunc = getcustomasset or getsynasset
     if customAssetFunc and writefile and readfile and isfile then
-        if not isfile(filename) then
-            if isfile('gamesense/' .. filename) then
-                filename = 'gamesense/' .. filename
+        local targetFile = filename
+        if not isfile(targetFile) then
+            if isfile('gamesense/' .. targetFile) then
+                targetFile = 'gamesense/' .. targetFile
             else
                 local ok, content = pcall(function()
                     return game:HttpGet(rawUrl)
                 end)
                 if ok and content and #content > 0 then
-                    pcall(writefile, filename, content)
+                    pcall(writefile, targetFile, content)
                 end
             end
         end
 
-        if isfile(filename) then
-            local ok, asset = pcall(customAssetFunc, filename)
+        if isfile(targetFile) then
+            local ok, asset = pcall(customAssetFunc, targetFile)
             if ok and asset then
                 return asset
             end
