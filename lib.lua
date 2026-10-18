@@ -2652,27 +2652,40 @@ do
             Parent = ListOuter;
         });
 
-        local function RecalculateListPosition()
-            local X = DropdownOuter.AbsolutePosition.X;
-            local Y = DropdownOuter.AbsolutePosition.Y + DropdownOuter.Size.Y.Offset + 1;
+        local function GetTargetDropdownHeight()
+            local count = #Dropdown.Values;
+            return math.clamp(count * DROPDOWN_ITEM_H, 0, MAX_DROPDOWN_ITEMS * DROPDOWN_ITEM_H) + 2;
+        end;
 
-            -- sur mobile, ouvre la liste vers le haut si elle dépasse en bas
+        local function RecalculateListPosition(forcedH)
+            local X = DropdownOuter.AbsolutePosition.X;
             local Cam = workspace.CurrentCamera;
             local VP = (Cam and Cam.ViewportSize.X > 0) and Cam.ViewportSize or ScreenGui.AbsoluteSize;
-            local ListH = ListOuter.Size.Y.Offset;
+            local TargetH = forcedH or GetTargetDropdownHeight();
 
-            if (Y + ListH) > (VP.Y - 4) and (DropdownOuter.AbsolutePosition.Y - ListH - 1) > 4 then
-                Y = DropdownOuter.AbsolutePosition.Y - ListH - 1;
+            local Y = DropdownOuter.AbsolutePosition.Y + DropdownOuter.AbsoluteSize.Y + 2;
+            local OpensUpward = false;
+
+            -- Si la liste dépasse en bas de l'écran (notamment en mode fenêtré), on l'ouvre vers le haut
+            if (Y + TargetH) > (VP.Y - 8) then
+                local UpY = DropdownOuter.AbsolutePosition.Y - TargetH - 2;
+                if UpY >= 4 or (DropdownOuter.AbsolutePosition.Y > (VP.Y / 2)) then
+                    Y = math.max(4, UpY);
+                    OpensUpward = true;
+                end;
             end;
 
             ListOuter.Position = UDim2.fromOffset(
-                math.clamp(X, 4, math.max(4, VP.X - ListOuter.Size.X.Offset - 4)),
-                math.clamp(Y, 4, math.max(4, VP.Y - ListH - 4))
+                math.clamp(X, 4, math.max(4, VP.X - DropdownOuter.AbsoluteSize.X - 4)),
+                math.clamp(Y, 4, math.max(4, VP.Y - TargetH - 4))
             );
+
+            return OpensUpward, TargetH;
         end;
 
         local function RecalculateListSize(YSize)
-            ListOuter.Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, YSize or (MAX_DROPDOWN_ITEMS * DROPDOWN_ITEM_H + 2))
+            local H = YSize or GetTargetDropdownHeight();
+            ListOuter.Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, H);
         end;
 
         RecalculateListPosition();
@@ -2892,20 +2905,30 @@ do
         end;
 
         function Dropdown:OpenDropdown()
+            local TargetH = GetTargetDropdownHeight();
+            local OpensUpward = RecalculateListPosition(TargetH);
+            RecalculateListSize(TargetH);
+
             ListOuter.Visible = true;
             Library.OpenedFrames[ListOuter] = true;
-
-            RecalculateListSize();
-            RecalculateListPosition();
 
             if TweenConfig.Dropdown > 0 then
                 Tween(DropdownArrow, TweenConfig.Dropdown, { Rotation = 180 },
                     Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
 
-                ListOuter.Size = UDim2.fromOffset(ListOuter.Size.X.Offset, 0);
-                Tween(ListOuter, TweenConfig.Dropdown, {
-                    Size = UDim2.fromOffset(ListOuter.Size.X.Offset, math.clamp(#Dropdown.Values * DROPDOWN_ITEM_H, 0, MAX_DROPDOWN_ITEMS * DROPDOWN_ITEM_H) + 1)
-                }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+                ListOuter.Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, 0);
+                if OpensUpward then
+                    local bottomY = DropdownOuter.AbsolutePosition.Y - 2;
+                    ListOuter.Position = UDim2.fromOffset(DropdownOuter.AbsolutePosition.X, bottomY);
+                    Tween(ListOuter, TweenConfig.Dropdown, {
+                        Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, TargetH),
+                        Position = UDim2.fromOffset(DropdownOuter.AbsolutePosition.X, bottomY - TargetH)
+                    }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+                else
+                    Tween(ListOuter, TweenConfig.Dropdown, {
+                        Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, TargetH)
+                    }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+                end;
             else
                 DropdownArrow.Rotation = 180;
             end;
@@ -4780,7 +4803,7 @@ function Library:CreateWindow(...)
         BorderColor3 = 'OutlineColor';
     });
 
-    Library:MakeDraggable(Outer, TabContainer, 35);
+    -- TabContainer must not be draggable to allow child ScrollingFrames to scroll properly
 
     function Window:AddTab(Name, Icon)
         local Tab = {
@@ -4844,9 +4867,14 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0, 8, 0, 8);
             Size = UDim2.new(0.5, -12, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            AutomaticCanvasSize = Enum.AutomaticSize.Y;
-            ScrollBarThickness = 2;
-            ScrollBarImageColor3 = Library.OutlineColor;
+            ScrollBarThickness = 4;
+            ScrollBarImageColor3 = Library.AccentColor;
+            TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            MidImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            ScrollingDirection = Enum.ScrollingDirection.Y;
+            Selectable = false;
+            Active = true;
             ZIndex = 2;
             Parent = TabFrame;
         });
@@ -4857,9 +4885,14 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0.5, 4, 0, 8);
             Size = UDim2.new(0.5, -12, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            AutomaticCanvasSize = Enum.AutomaticSize.Y;
-            ScrollBarThickness = 2;
-            ScrollBarImageColor3 = Library.OutlineColor;
+            ScrollBarThickness = 4;
+            ScrollBarImageColor3 = Library.AccentColor;
+            TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            MidImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            ScrollingDirection = Enum.ScrollingDirection.Y;
+            Selectable = false;
+            Active = true;
             ZIndex = 2;
             Parent = TabFrame;
         });
@@ -4870,9 +4903,14 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0, 8, 0, 8);
             Size = UDim2.new(1, -16, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            AutomaticCanvasSize = Enum.AutomaticSize.Y;
-            ScrollBarThickness = 2;
-            ScrollBarImageColor3 = Library.OutlineColor;
+            ScrollBarThickness = 4;
+            ScrollBarImageColor3 = Library.AccentColor;
+            TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            MidImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            ScrollingDirection = Enum.ScrollingDirection.Y;
+            Selectable = false;
+            Active = true;
             ZIndex = 2;
             Parent = TabFrame;
         });
@@ -4902,9 +4940,14 @@ function Library:CreateWindow(...)
         });
 
         for _, Side in next, { LeftSide, RightSide, FullSide } do
-            Side:WaitForChild('UIListLayout'):GetPropertyChangedSignal('AbsoluteContentSize'):Connect(function()
-                Side.CanvasSize = UDim2.fromOffset(0, Side.UIListLayout.AbsoluteContentSize.Y);
-            end);
+            local layout = Side:WaitForChild('UIListLayout');
+            local function UpdateCanvas()
+                local contentH = layout.AbsoluteContentSize.Y;
+                Side.CanvasSize = UDim2.fromOffset(0, contentH + 24);
+            end;
+            layout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(UpdateCanvas);
+            Side:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateCanvas);
+            task.defer(UpdateCanvas);
         end;
 
         function Tab:ShowTab()
@@ -4995,20 +5038,37 @@ function Library:CreateWindow(...)
             });
 
             function Groupbox:Resize()
-                local Size = 0;
+                local layout = Container:FindFirstChildOfClass('UIListLayout');
+                local contentHeight = 0;
 
-                for _, Element in next, Groupbox.Container:GetChildren() do
-                    if (not Element:IsA('UIListLayout')) and Element.Visible then
-                        Size = Size + Element.Size.Y.Offset;
+                if layout and layout.AbsoluteContentSize.Y > 0 then
+                    contentHeight = layout.AbsoluteContentSize.Y;
+                else
+                    local count = 0;
+                    for _, Element in next, Container:GetChildren() do
+                        if (not Element:IsA('UIListLayout')) and Element.Visible then
+                            contentHeight = contentHeight + Element.Size.Y.Offset;
+                            count = count + 1;
+                        end;
+                    end;
+                    if count > 1 then
+                        contentHeight = contentHeight + (count - 1) * 4;
                     end;
                 end;
 
                 if isFull then
                     local minH = (parentSide.AbsoluteSize.Y > 50) and (parentSide.AbsoluteSize.Y - 8) or 380;
-                    BoxOuter.Size = UDim2.new(1, 0, 0, math.max(minH, 14 + Size + 14));
+                    BoxOuter.Size = UDim2.new(1, 0, 0, math.max(minH, contentHeight + 22));
                 else
-                    BoxOuter.Size = UDim2.new(1, 0, 0, 14 + Size + 10);
+                    BoxOuter.Size = UDim2.new(1, 0, 0, contentHeight + 22);
                 end;
+            end;
+
+            local cLayout = Container:FindFirstChildOfClass('UIListLayout');
+            if cLayout then
+                cLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(function()
+                    Groupbox:Resize();
+                end);
             end;
 
             Groupbox.Container = Container;
@@ -5484,8 +5544,31 @@ function Library:CreateWindow(...)
         local SettingsTab = Window:AddTab(TabName, TabIcon);
         Window.SettingsTab = SettingsTab;
 
-        -- 1. Menu Configuration (gauche)
-        local MenuBox = SettingsTab:AddLeftGroupbox('Menu Configuration');
+        -- 1. Thèmes (côté GAUCHE - groupe entier dédié)
+        pcall(function()
+            ThemeManager:SetLibrary(Library);
+            if SettingsConfig.Folder then
+                ThemeManager:SetFolder(SettingsConfig.Folder);
+            end;
+            ThemeManager:ApplyToTab(SettingsTab);
+        end);
+
+        -- 2. Configurations / Sauvegardes (côté DROIT - haut)
+        pcall(function()
+            SaveManager:SetLibrary(Library);
+            SaveManager:IgnoreThemeSettings();
+            SaveManager:SetIgnoreIndexes({
+                'SaveManager_ConfigList', 'SaveManager_ConfigName', 'SaveManager_AutoLoadToggle',
+                'MenuKeybind', 'KeybindMenuOpen', 'ShowWatermark', 'ShowCustomCursor', 'NotificationSide'
+            });
+            if SettingsConfig.ConfigFolder or SettingsConfig.Folder then
+                SaveManager:SetFolder(SettingsConfig.ConfigFolder or SettingsConfig.Folder);
+            end;
+            SaveManager:BuildConfigSection(SettingsTab);
+        end);
+
+        -- 3. Menu Configuration (côté DROIT - sous la Configuration)
+        local MenuBox = SettingsTab:AddRightGroupbox('Menu Configuration');
 
         if Library.KeybindFrame then
             MenuBox:AddToggle('KeybindMenuOpen', {
@@ -5544,29 +5627,6 @@ function Library:CreateWindow(...)
         if Options.MenuKeybind then
             Library.ToggleKeybind = Options.MenuKeybind;
         end;
-
-        -- 2. Thèmes (côté gauche sous Menu Configuration)
-        pcall(function()
-            ThemeManager:SetLibrary(Library);
-            if SettingsConfig.Folder then
-                ThemeManager:SetFolder(SettingsConfig.Folder);
-            end;
-            ThemeManager:ApplyToTab(SettingsTab);
-        end);
-
-        -- 3. Configurations / Sauvegardes (côté droit)
-        pcall(function()
-            SaveManager:SetLibrary(Library);
-            SaveManager:IgnoreThemeSettings();
-            SaveManager:SetIgnoreIndexes({
-                'SaveManager_ConfigList', 'SaveManager_ConfigName', 'SaveManager_AutoLoadToggle',
-                'MenuKeybind', 'KeybindMenuOpen', 'ShowWatermark', 'ShowCustomCursor', 'NotificationSide'
-            });
-            if SettingsConfig.ConfigFolder or SettingsConfig.Folder then
-                SaveManager:SetFolder(SettingsConfig.ConfigFolder or SettingsConfig.Folder);
-            end;
-            SaveManager:BuildConfigSection(SettingsTab);
-        end);
 
         -- 4. Auto-load des thèmes & configs par défaut
         task.defer(function()
