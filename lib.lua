@@ -1,5 +1,15 @@
 if not game:IsLoaded() then
-    game.Loaded:Wait();
+    local loaded = false;
+    local c;
+    pcall(function()
+        c = game.Loaded:Connect(function() loaded = true; end);
+    end);
+    local t0 = tick();
+    while not loaded and (tick() - t0 < 3) do
+        if game:IsLoaded() then break; end;
+        task.wait(0.1);
+    end;
+    if c then pcall(function() c:Disconnect(); end); end;
 end;
 
 if getgenv and getgenv().Library and getgenv().Library.Unload then
@@ -18,7 +28,8 @@ local TweenService = game:GetService('TweenService');
 local RenderStepped = RunService.RenderStepped;
 
 local LocalPlayer = Players.LocalPlayer;
-while not LocalPlayer do
+local t0_lp = tick();
+while not LocalPlayer and (tick() - t0_lp < 3) do
     task.wait(0.1);
     LocalPlayer = Players.LocalPlayer;
 end;
@@ -60,7 +71,7 @@ local okParent = pcall(function()
 end);
 if not okParent or not ScreenGui.Parent then
     pcall(function()
-        ScreenGui.Parent = LocalPlayer:WaitForChild('PlayerGui', 5) or CoreGui;
+        ScreenGui.Parent = LocalPlayer:FindFirstChild('PlayerGui') or CoreGui;
     end);
 end;
 
