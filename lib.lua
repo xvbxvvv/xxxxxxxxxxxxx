@@ -5025,6 +5025,8 @@ function Library:GetCustomAsset(url, filename)
     return rawUrl
 end;
 
+local UpdateWatermarkDisplay;
+
 function Library:SetWatermarkIcon(url)
     if not Library.WatermarkIcon then return end
     if url == false then
@@ -5082,7 +5084,7 @@ local function StripTags(str)
     return str:gsub('<[^>]->', '');
 end;
 
-local function UpdateWatermarkDisplay()
+UpdateWatermarkDisplay = function()
     if not Library.Watermark or not Library.Watermark.Visible then return end;
 
     local base = Library.WatermarkTitle or 'gamesense.pub';
