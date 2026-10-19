@@ -2762,6 +2762,16 @@ do
             Parent = DropdownInner;
         });
 
+        local DropdownClickButton = Library:Create('TextButton', {
+            BackgroundTransparency = 1;
+            BorderSizePixel = 0;
+            Size = UDim2.new(1, 0, 1, 0);
+            Text = '';
+            ZIndex = 9;
+            Active = true;
+            Parent = DropdownOuter;
+        });
+
         Library:OnHighlight(DropdownOuter, DropdownOuter,
             { BorderColor3 = 'AccentColor' },
             { BorderColor3 = 'Black' }
@@ -2779,6 +2789,7 @@ do
             ZIndex = 100;
             Active = true;
             Visible = false;
+            ClipsDescendants = true;
             Parent = ScreenGui;
         });
 
@@ -2794,6 +2805,9 @@ do
             ZIndex = 101;
             Parent = ListOuter;
         });
+
+        local IsOpen = false;
+        local IsAnimating = false;
 
         local function GetTargetDropdownHeight()
             local count = #Dropdown.Values;
@@ -2846,7 +2860,11 @@ do
         RecalculateListPosition();
         RecalculateListSize();
 
-        DropdownOuter:GetPropertyChangedSignal('AbsolutePosition'):Connect(RecalculateListPosition);
+        DropdownOuter:GetPropertyChangedSignal('AbsolutePosition'):Connect(function()
+            if IsOpen and not IsAnimating then
+                RecalculateListPosition();
+            end;
+        end);
 
         local ListInner = Library:Create('Frame', {
             BackgroundColor3 = Library.MainColor;
@@ -2854,6 +2872,7 @@ do
             Size = UDim2.new(1, 0, 1, 0);
             ZIndex = 101;
             Active = true;
+            ClipsDescendants = true;
             Parent = ListOuter;
         });
 
@@ -2881,13 +2900,15 @@ do
             CanvasSize = UDim2.new(0, 0, 0, 0);
             Size = UDim2.new(1, 0, 1, 0);
             ZIndex = 102;
+            Active = true;
+            Selectable = false;
+            ScrollingDirection = Enum.ScrollingDirection.Y;
+            ElasticBehavior = Enum.ElasticBehavior.WhenScrollable;
+            ScrollBarThickness = IsMobile and 8 or 4;
+            ScrollBarImageColor3 = Library.AccentColor;
+            TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
             Parent = ListInner;
-
-            TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png',
-            BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png',
-
-            ScrollBarThickness = 3,
-            ScrollBarImageColor3 = Library.AccentColor,
         });
 
         Library:AddToRegistry(Scrolling, {
@@ -2957,7 +2978,7 @@ do
                     BorderMode = Enum.BorderMode.Middle;
                     Size = UDim2.new(1, -1, 0, DROPDOWN_ITEM_H);
                     ZIndex = 103;
-                    Active = true;
+                    Active = false;
                     Parent = Scrolling;
                 });
 
@@ -2965,7 +2986,6 @@ do
                     CornerRadius = UDim.new(0, 3);
                     Parent = Button;
                 });
-
 
                 Library:AddToRegistry(Button, {
                     BackgroundColor3 = 'MainColor';
@@ -2983,7 +3003,17 @@ do
                     Parent = Button;
                 });
 
-                Library:OnHighlight(Button, Button,
+                local ItemClickBtn = Library:Create('TextButton', {
+                    BackgroundTransparency = 1;
+                    BorderSizePixel = 0;
+                    Size = UDim2.new(1, 0, 1, 0);
+                    Text = '';
+                    ZIndex = 106;
+                    Active = true;
+                    Parent = Button;
+                });
+
+                Library:OnHighlight(Button, ItemClickBtn,
                     { BorderColor3 = 'AccentColor', ZIndex = 104 },
                     { BorderColor3 = 'OutlineColor', ZIndex = 103 }
                 );
@@ -3007,43 +3037,44 @@ do
                     Library.RegistryMap[ButtonLabel].Properties.TextColor3 = Selected and 'AccentColor' or 'FontColor';
                 end;
 
-                ButtonLabel.InputBegan:Connect(function(Input)
-                    if IsClickInput(Input) then
-                        local Try = not Selected;
+                ItemClickBtn.Activated:Connect(function()
+                    local Try = not Selected;
 
-                        if Dropdown:GetActiveValues() == 1 and (not Try) and (not Info.AllowNull) then
-                        else
-                            if Info.Multi then
-                                Selected = Try;
-
-                                if Selected then
-                                    Dropdown.Value[Value] = true;
-                                else
-                                    Dropdown.Value[Value] = nil;
-                                end;
-                            else
-                                Selected = Try;
-
-                                if Selected then
-                                    Dropdown.Value = Value;
-                                else
-                                    Dropdown.Value = nil;
-                                end;
-
-                                for _, OtherButton in next, Buttons do
-                                    OtherButton:UpdateButton();
-                                end;
-                            end;
-
-                            Table:UpdateButton();
-                            Dropdown:Display();
-
-                            Library:SafeCallback(Dropdown.Callback, Dropdown.Value);
-                            Library:SafeCallback(Dropdown.Changed, Dropdown.Value);
-
-                            Library:AttemptSave();
-                        end;
+                    if Dropdown:GetActiveValues() == 1 and (not Try) and (not Info.AllowNull) then
+                        return;
                     end;
+
+                    if Info.Multi then
+                        Selected = Try;
+
+                        if Selected then
+                            Dropdown.Value[Value] = true;
+                        else
+                            Dropdown.Value[Value] = nil;
+                        end;
+                    else
+                        Selected = Try;
+
+                        if Selected then
+                            Dropdown.Value = Value;
+                        else
+                            Dropdown.Value = nil;
+                        end;
+
+                        for _, OtherButton in next, Buttons do
+                            OtherButton:UpdateButton();
+                        end;
+
+                        Dropdown:CloseDropdown();
+                    end;
+
+                    Table:UpdateButton();
+                    Dropdown:Display();
+
+                    Library:SafeCallback(Dropdown.Callback, Dropdown.Value);
+                    Library:SafeCallback(Dropdown.Changed, Dropdown.Value);
+
+                    Library:AttemptSave();
                 end);
 
                 Table:UpdateButton();
@@ -3068,56 +3099,94 @@ do
 
         Dropdown.Refresh = Dropdown.SetValues;
 
-        function Dropdown:OpenDropdown()
-            local TargetH = GetTargetDropdownHeight();
-            local OpensUpward = RecalculateListPosition(TargetH);
-            RecalculateListSize(TargetH);
+        local LastOpenTime = 0;
+        local LastToggleTime = 0;
 
+        function Dropdown:OpenDropdown()
+            if Library.ActiveDropdown and Library.ActiveDropdown ~= Dropdown then
+                pcall(function() Library.ActiveDropdown:CloseDropdown(); end);
+            end;
+            Library.ActiveDropdown = Dropdown;
+
+            IsOpen = true;
+            IsAnimating = true;
+            LastOpenTime = os.clock();
+
+            local TargetH = GetTargetDropdownHeight();
+            local OpensUpward, finalH = RecalculateListPosition(TargetH);
+            TargetH = finalH or TargetH;
+
+            ListOuter.ClipsDescendants = true;
             ListOuter.Visible = true;
             Library.OpenedFrames[ListOuter] = true;
+
+            local finalPos = ListOuter.Position;
+            local width = DropdownOuter.AbsoluteSize.X;
 
             if TweenConfig.Dropdown > 0 then
                 Tween(DropdownArrow, TweenConfig.Dropdown, { Rotation = 180 },
                     Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
 
-                ListOuter.Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, 0);
                 if OpensUpward then
-                    local bottomY = DropdownOuter.AbsolutePosition.Y - 2;
-                    ListOuter.Position = UDim2.fromOffset(DropdownOuter.AbsolutePosition.X, bottomY);
+                    local startY = finalPos.Y.Offset + TargetH;
+                    ListOuter.Position = UDim2.fromOffset(finalPos.X.Offset, startY);
+                    ListOuter.Size = UDim2.fromOffset(width, 0);
                     Tween(ListOuter, TweenConfig.Dropdown, {
-                        Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, TargetH),
-                        Position = UDim2.fromOffset(DropdownOuter.AbsolutePosition.X, bottomY - TargetH)
+                        Size = UDim2.fromOffset(width, TargetH),
+                        Position = finalPos
                     }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
                 else
+                    ListOuter.Position = finalPos;
+                    ListOuter.Size = UDim2.fromOffset(width, 0);
                     Tween(ListOuter, TweenConfig.Dropdown, {
-                        Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, TargetH)
+                        Size = UDim2.fromOffset(width, TargetH)
                     }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
                 end;
+
+                task.delay(TweenConfig.Dropdown, function()
+                    if IsOpen then
+                        ListOuter.Size = UDim2.fromOffset(width, TargetH);
+                        ListOuter.Position = finalPos;
+                        IsAnimating = false;
+                    end;
+                end);
             else
                 DropdownArrow.Rotation = 180;
+                ListOuter.Size = UDim2.fromOffset(width, TargetH);
+                ListOuter.Position = finalPos;
+                IsAnimating = false;
             end;
         end;
 
         function Dropdown:CloseDropdown()
+            if not IsOpen and not ListOuter.Visible then return; end;
+            IsOpen = false;
+            IsAnimating = true;
+
+            if Library.ActiveDropdown == Dropdown then
+                Library.ActiveDropdown = nil;
+            end;
             Library.OpenedFrames[ListOuter] = nil;
 
             if TweenConfig.Dropdown > 0 then
                 Tween(DropdownArrow, TweenConfig.Dropdown, { Rotation = 0 },
                     Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
 
-                local CurrentSize = ListOuter.Size;
+                local currentW = ListOuter.Size.X.Offset > 0 and ListOuter.Size.X.Offset or DropdownOuter.AbsoluteSize.X;
                 Tween(ListOuter, TweenConfig.Dropdown, {
-                    Size = UDim2.fromOffset(CurrentSize.X.Offset, 0)
+                    Size = UDim2.fromOffset(currentW, 0)
                 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
 
                 task.delay(TweenConfig.Dropdown, function()
-                    if ListOuter and not Library.OpenedFrames[ListOuter] then
+                    if not IsOpen then
                         ListOuter.Visible = false;
+                        IsAnimating = false;
                     end;
                 end);
             else
                 ListOuter.Visible = false;
                 DropdownArrow.Rotation = 0;
+                IsAnimating = false;
             end;
         end;
 
@@ -3151,27 +3220,39 @@ do
             Library:SafeCallback(Dropdown.Changed, Dropdown.Value);
         end;
 
-        DropdownOuter.InputBegan:Connect(function(Input)
-            if not IsClickInput(Input) then return end;
-            if Library:MouseIsOverOpenedFrame(Input.Position.X, Input.Position.Y) then return end;
-            if ListOuter.Visible then
+        local function ToggleDropdown()
+            if (os.clock() - LastToggleTime) < 0.15 then return; end;
+            LastToggleTime = os.clock();
+
+            if IsOpen then
                 Dropdown:CloseDropdown();
             else
                 Dropdown:OpenDropdown();
             end;
-        end);
+        end;
+
+        DropdownClickButton.Activated:Connect(ToggleDropdown);
+
+        local function PointInGui(obj, x, y)
+            if not obj or not obj.Visible then return false; end;
+            local pos = obj.AbsolutePosition;
+            local size = obj.AbsoluteSize;
+            return (x >= (pos.X - 4) and x <= (pos.X + size.X + 4) and y >= (pos.Y - 4) and y <= (pos.Y + size.Y + 4));
+        end;
 
         Library:GiveSignal(InputService.InputBegan:Connect(function(Input)
-            if not IsMouseInput(Input) then return end;
+            if not IsMouseInput(Input) then return; end;
+            if not IsOpen then return; end;
+            if (os.clock() - LastOpenTime) < 0.25 then return; end;
+
             local PX = Input.Position.X;
             local PY = Input.Position.Y;
-            local AbsPos, AbsSize = ListOuter.AbsolutePosition, ListOuter.AbsoluteSize;
 
-            if PX < AbsPos.X or PX > AbsPos.X + AbsSize.X
-                or PY < (AbsPos.Y - 20 - 1) or PY > AbsPos.Y + AbsSize.Y then
-
-                Dropdown:CloseDropdown();
+            if PointInGui(DropdownOuter, PX, PY) or PointInGui(ListOuter, PX, PY) then
+                return;
             end;
+
+            Dropdown:CloseDropdown();
         end));
 
         Dropdown:BuildDropdownList();
@@ -3355,8 +3436,14 @@ do
             Position = UDim2.new(0, 2, 0, SearchHeight + 2);
             Size = UDim2.new(1, -4, 1, -(SearchHeight + ResetHeight + 4));
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            ScrollBarThickness = 3;
+            Active = true;
+            Selectable = false;
+            ScrollingDirection = Enum.ScrollingDirection.Y;
+            ElasticBehavior = Enum.ElasticBehavior.WhenScrollable;
+            ScrollBarThickness = IsMobile and 8 or 4;
             ScrollBarImageColor3 = Library.OutlineColor;
+            TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
             ZIndex = 6;
             Parent = Outer;
         });
@@ -3408,7 +3495,7 @@ do
                 });
                 Library:ApplyTextStroke(Btn);
 
-                Btn.MouseButton1Click:Connect(function()
+                Btn.Activated:Connect(function()
                     if List.Multi then
                         List.Value[val] = not List.Value[val];
                     else
