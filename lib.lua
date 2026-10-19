@@ -2768,12 +2768,13 @@ do
             Library:AddToolTip(Info.Tooltip, DropdownOuter)
         end
 
-        local MAX_DROPDOWN_ITEMS = 8;
+        local MAX_DROPDOWN_ITEMS = Info.MaxItems or 6;
 
         local ListOuter = Library:Create('Frame', {
             BackgroundColor3 = Color3.new(0, 0, 0);
             BorderSizePixel = 0;
-            ZIndex = 20;
+            ZIndex = 100;
+            Active = true;
             Visible = false;
             Parent = ScreenGui;
         });
@@ -2787,7 +2788,7 @@ do
             Color = Library.OutlineColor;
             Thickness = 1;
             ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
-            ZIndex = 22;
+            ZIndex = 101;
             Parent = ListOuter;
         });
 
@@ -2802,14 +2803,26 @@ do
             local VP = (Cam and Cam.ViewportSize.X > 0) and Cam.ViewportSize or ScreenGui.AbsoluteSize;
             local TargetH = forcedH or GetTargetDropdownHeight();
 
+            -- Limite basse sécurisée : bas de la fenêtre UI ou bas de l'écran
+            local winBottom = VP.Y - 14;
+            local winTop = 14;
+            if Library and Library.Window and Library.Window.Holder then
+                local h = Library.Window.Holder;
+                winBottom = math.min(winBottom, h.AbsolutePosition.Y + h.AbsoluteSize.Y - 14);
+                winTop = math.max(winTop, h.AbsolutePosition.Y + 14);
+            end;
+
             local Y = DropdownOuter.AbsolutePosition.Y + DropdownOuter.AbsoluteSize.Y + 2;
             local OpensUpward = false;
 
-            -- Si la liste dépasse en bas de l'écran (notamment en mode fenêtré), on l'ouvre vers le haut
-            if (Y + TargetH) > (VP.Y - 8) then
+            local spaceBelow = winBottom - Y;
+            local spaceAbove = DropdownOuter.AbsolutePosition.Y - winTop - 2;
+
+            -- Si la liste dépasse en bas de la fenêtre/écran ou si l'espace au-dessus est plus grand
+            if (Y + TargetH) > winBottom or (spaceBelow < TargetH and spaceAbove > spaceBelow) then
                 local UpY = DropdownOuter.AbsolutePosition.Y - TargetH - 2;
-                if UpY >= 4 or (DropdownOuter.AbsolutePosition.Y > (VP.Y / 2)) then
-                    Y = math.max(4, UpY);
+                if UpY >= winTop or spaceAbove > 0 then
+                    Y = math.max(winTop, UpY);
                     OpensUpward = true;
                 end;
             end;
@@ -2836,7 +2849,8 @@ do
             BackgroundColor3 = Library.MainColor;
             BorderSizePixel = 0;
             Size = UDim2.new(1, 0, 1, 0);
-            ZIndex = 21;
+            ZIndex = 101;
+            Active = true;
             Parent = ListOuter;
         });
 
@@ -2863,7 +2877,7 @@ do
             BorderSizePixel = 0;
             CanvasSize = UDim2.new(0, 0, 0, 0);
             Size = UDim2.new(1, 0, 1, 0);
-            ZIndex = 21;
+            ZIndex = 102;
             Parent = ListInner;
 
             TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png',
@@ -2939,7 +2953,7 @@ do
                     BorderColor3 = Library.OutlineColor;
                     BorderMode = Enum.BorderMode.Middle;
                     Size = UDim2.new(1, -1, 0, DROPDOWN_ITEM_H);
-                    ZIndex = 23;
+                    ZIndex = 103;
                     Active = true;
                     Parent = Scrolling;
                 });
@@ -2962,13 +2976,13 @@ do
                     TextSize = 14;
                     Text = Value;
                     TextXAlignment = Enum.TextXAlignment.Left;
-                    ZIndex = 25;
+                    ZIndex = 105;
                     Parent = Button;
                 });
 
                 Library:OnHighlight(Button, Button,
-                    { BorderColor3 = 'AccentColor', ZIndex = 24 },
-                    { BorderColor3 = 'OutlineColor', ZIndex = 23 }
+                    { BorderColor3 = 'AccentColor', ZIndex = 104 },
+                    { BorderColor3 = 'OutlineColor', ZIndex = 103 }
                 );
 
                 local Selected;
@@ -7503,6 +7517,7 @@ function Library:CreateWindow(...)
     end;
 
     Window.Holder = Outer;
+    Library.Window = Window;
 
     return Window;
 end;
