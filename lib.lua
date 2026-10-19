@@ -107,8 +107,11 @@ end
 --============================================================
 --  Mobile / touch helpers
 --============================================================
-local IsMobile = (InputService.TouchEnabled and not InputService.MouseEnabled);
-local IsTouch = (InputService.TouchEnabled or InputService.GamepadEnabled);
+local IsPC = (InputService.KeyboardEnabled and InputService.MouseEnabled);
+local IsMobile = (InputService.TouchEnabled and not IsPC);
+local IsTouch = IsMobile;
+Library.IsMobile = IsMobile;
+Library.IsPC = IsPC;
 
 -- agrandit les zones tactiles (un doigt ≠ une souris)
 local function TouchPad(Height)
@@ -7207,7 +7210,8 @@ function Library:CreateWindow(...)
         Text = '';
         AutoButtonColor = false;
         ZIndex = 200;
-        Visible = IsTouch;
+        Active = true;
+        Visible = IsMobile;
         Parent = ScreenGui;
     });
 
@@ -7232,6 +7236,7 @@ function Library:CreateWindow(...)
         Image = 'rbxassetid://7734053495';
         ScaleType = Enum.ScaleType.Fit;
         ZIndex = 202;
+        Active = false;
         Parent = OpenButton;
     });
 
@@ -7272,72 +7277,74 @@ function Library:CreateWindow(...)
         SyncOpenButton(Outer.Visible);
     end));
 
-    -- Déplaçable n'importe où sur l'écran + tap pour synchroniser On/Off
-    Library:GiveSignal(OpenButton.InputBegan:Connect(function(Input)
-        if Input.UserInputType ~= Enum.UserInputType.MouseButton1
-            and Input.UserInputType ~= Enum.UserInputType.Touch then
-            return;
+    -- Déplaçable n'importe où sur l'écran + tap/click pour synchroniser On/Off
+    local isDragging = false;
+    local hasDragged = false;
+    local dragStartPos = Vector2.zero;
+    local buttonStartAbs = Vector2.zero;
+    local dragInput = nil;
+
+    local function GetInputScreenPos(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseMovement then
+            return InputService:GetMouseLocation();
+        else
+            return Vector2.new(input.Position.X, input.Position.Y);
         end;
+    end;
 
-        local startPos = Vector2.new(Input.Position.X, Input.Position.Y);
-        local startAbs = OpenButton.AbsolutePosition;
-        local moved = false;
-        local dragging = true;
-        local activeInput = Input;
-
-        local moveConn
-        local endConn
-
-        local function Disconnect()
-            dragging = false;
-            if moveConn then moveConn:Disconnect(); moveConn = nil; end;
-            if endConn then endConn:Disconnect(); endConn = nil; end;
+    Library:GiveSignal(OpenButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = true;
+            hasDragged = false;
+            dragInput = input;
+            dragStartPos = GetInputScreenPos(input);
+            buttonStartAbs = OpenButton.AbsolutePosition;
         end;
+    end));
 
-        moveConn = InputService.InputChanged:Connect(function(moveInput)
-            if not dragging then return end;
+    Library:GiveSignal(InputService.InputChanged:Connect(function(input)
+        if not isDragging then return; end;
+        local isMatch = (input == dragInput)
+            or (dragInput and dragInput.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement)
+            or (dragInput and dragInput.UserInputType == Enum.UserInputType.Touch and input.UserInputType == Enum.UserInputType.Touch);
 
-            local isMatch = (moveInput == activeInput)
-                or (activeInput.UserInputType == Enum.UserInputType.Touch and moveInput.UserInputType == Enum.UserInputType.Touch)
-                or (activeInput.UserInputType == Enum.UserInputType.MouseButton1 and moveInput.UserInputType == Enum.UserInputType.MouseMovement);
+        if isMatch then
+            local currentPos = GetInputScreenPos(input);
+            local delta = currentPos - dragStartPos;
 
-            if isMatch and moveInput.Position then
-                local dx = moveInput.Position.X - startPos.X;
-                local dy = moveInput.Position.Y - startPos.Y;
+            if (math.abs(delta.X) > 8) or (math.abs(delta.Y) > 8) then
+                hasDragged = true;
+            end;
 
-                if (math.abs(dx) > 16) or (math.abs(dy) > 16) then
-                    moved = true;
-                end;
-
+            if hasDragged then
                 local VP = GetViewport();
                 local W, H = OpenButton.AbsoluteSize.X, OpenButton.AbsoluteSize.Y;
-
                 OpenButton.AnchorPoint = Vector2.zero;
                 OpenButton.Position = UDim2.fromOffset(
-                    math.clamp(startAbs.X + dx, -20, math.max(-20, VP.X - W + 20)),
-                    math.clamp(startAbs.Y + dy, 0, math.max(0, VP.Y - H))
+                    math.clamp(buttonStartAbs.X + delta.X, -20, math.max(-20, VP.X - W + 20)),
+                    math.clamp(buttonStartAbs.Y + delta.Y, 0, math.max(0, VP.Y - H))
                 );
             end;
-        end);
+        end;
+    end));
 
-        endConn = InputService.InputEnded:Connect(function(endInput)
-            if endInput == activeInput
-                or (activeInput.UserInputType == Enum.UserInputType.MouseButton1 and endInput.UserInputType == Enum.UserInputType.MouseButton1)
-                or (activeInput.UserInputType == Enum.UserInputType.Touch and endInput.UserInputType == Enum.UserInputType.Touch) then
-                Disconnect();
-                if not moved then
+    Library:GiveSignal(InputService.InputEnded:Connect(function(input)
+        if not isDragging then return; end;
+        local isMatch = (input == dragInput)
+            or (dragInput and dragInput.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseButton1)
+            or (dragInput and dragInput.UserInputType == Enum.UserInputType.Touch and input.UserInputType == Enum.UserInputType.Touch);
+
+        if isMatch then
+            isDragging = false;
+            dragInput = nil;
+            if not hasDragged then
+                task.spawn(function()
                     Library:Toggle();
-                    task.defer(function() SyncOpenButton(Outer.Visible) end);
-                end;
+                    SyncOpenButton(Outer.Visible);
+                end);
             end;
-        end);
-
-        activeInput.Changed:Connect(function()
-            if activeInput.UserInputState == Enum.UserInputState.End
-                or activeInput.UserInputState == Enum.UserInputState.Cancel then
-                Disconnect();
-            end;
-        end);
+            hasDragged = false;
+        end;
     end));
 
     if Config.AutoShow and not Outer.Visible then
