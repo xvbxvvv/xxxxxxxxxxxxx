@@ -7128,6 +7128,7 @@ function Library:CreateWindow(...)
         if (not FadeTime) or FadeTime <= 0 then
             Outer.Visible = Toggled;
             Fading = false;
+            if Library.UpdateOpenButtonState then Library.UpdateOpenButtonState(Toggled) end;
             return;
         end;
 
@@ -7135,6 +7136,8 @@ function Library:CreateWindow(...)
             -- A bit scuffed, but if we're going from not toggled -> toggled we want to show the frame immediately so that the fade is visible.
             Outer.Visible = true;
         end;
+
+        if Library.UpdateOpenButtonState then Library.UpdateOpenButtonState(Toggled) end;
 
         for _, Desc in next, Outer:GetDescendants() do
             local Properties = {};
@@ -7175,6 +7178,7 @@ function Library:CreateWindow(...)
         task.wait(FadeTime);
 
         Outer.Visible = Toggled;
+        if Library.UpdateOpenButtonState then Library.UpdateOpenButtonState(Toggled) end;
 
         Fading = false;
     end
@@ -7190,31 +7194,83 @@ function Library:CreateWindow(...)
     end))
 
     --============================================================
-    --  Bouton flottant d'ouverture (mobile / tactile : pas de clavier)
+    --  Bouton flottant d'ouverture (mobile / tactile avec logo synchronisé)
     --============================================================
     local OpenButton = Library:Create('TextButton', {
         BackgroundColor3 = Library.AccentColor;
-        BorderColor3 = Library.AccentColorDark;
-        BorderMode = Enum.BorderMode.Inset;
+        BorderSizePixel = 0;
         AnchorPoint = Vector2.new(1, 0.5);
-        Position = UDim2.new(1, -20, 0.5, 0);
-        Size = UDim2.new(0, 46, 0, 46);
-        Text = 'GS';
-        TextColor3 = Color3.new(1, 1, 1);
-        TextSize = 16;
-        Font = Library.Font;
+        Position = UDim2.new(1, -16, 0.5, 0);
+        Size = UDim2.new(0, 48, 0, 48);
+        Text = '';
         AutoButtonColor = false;
-        ZIndex = 50;
+        ZIndex = 200;
         Visible = IsTouch;
         Parent = ScreenGui;
     });
 
-    Library:AddToRegistry(OpenButton, {
-        BackgroundColor3 = 'AccentColor';
-        BorderColor3 = 'AccentColorDark';
+    Library:Create('UICorner', {
+        CornerRadius = UDim.new(0, 12);
+        Parent = OpenButton;
     });
 
-    -- déplaçable + tap pour ouvrir/fermer (tactile et souris)
+    local OpenButtonStroke = Library:Create('UIStroke', {
+        Color = Color3.fromRGB(255, 255, 255);
+        Thickness = 1.5;
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+        Parent = OpenButton;
+    });
+
+    local OpenButtonLogo = Library:Create('ImageLabel', {
+        BackgroundTransparency = 1;
+        BorderSizePixel = 0;
+        Size = UDim2.new(1, -8, 1, -8);
+        Position = UDim2.new(0.5, 0, 0.5, 0);
+        AnchorPoint = Vector2.new(0.5, 0.5);
+        Image = 'rbxassetid://7734053495';
+        ScaleType = Enum.ScaleType.Fit;
+        ZIndex = 202;
+        Parent = OpenButton;
+    });
+
+    Library:Create('UICorner', {
+        CornerRadius = UDim.new(0, 8);
+        Parent = OpenButtonLogo;
+    });
+
+    task.spawn(function()
+        local logoUrl = Library.DefaultLogoUrl or 'https://github.com/xvbxvvv/logo/blob/main/0fb782bd-42a8-46bd-8a52-7df5bee0812a.jpg?raw=true';
+        local asset = Library:GetCustomAsset(logoUrl, 'gamesense_mobile_logo.jpg');
+        if asset and asset ~= '' and OpenButtonLogo then
+            OpenButtonLogo.Image = asset;
+        end;
+    end);
+
+    local function SyncOpenButton(isOpen)
+        if isOpen == nil then isOpen = Outer.Visible end;
+        if isOpen then
+            OpenButton.BackgroundColor3 = Library.AccentColor;
+            OpenButton.BackgroundTransparency = 0.1;
+            OpenButtonStroke.Color = Color3.fromRGB(255, 255, 255);
+            OpenButtonStroke.Thickness = 2;
+        else
+            OpenButton.BackgroundColor3 = Color3.fromRGB(16, 16, 20);
+            OpenButton.BackgroundTransparency = 0.25;
+            OpenButtonStroke.Color = Library.AccentColor;
+            OpenButtonStroke.Thickness = 1.5;
+        end;
+    end;
+
+    Library.UpdateOpenButtonState = SyncOpenButton;
+    Library.OpenButton = OpenButton;
+    SyncOpenButton(Outer.Visible);
+
+    Library:GiveSignal(Outer:GetPropertyChangedSignal('Visible'):Connect(function()
+        Toggled = Outer.Visible;
+        SyncOpenButton(Outer.Visible);
+    end));
+
+    -- Déplaçable n'importe où sur l'écran + tap pour synchroniser On/Off
     Library:GiveSignal(OpenButton.InputBegan:Connect(function(Input)
         if Input.UserInputType ~= Enum.UserInputType.MouseButton1
             and Input.UserInputType ~= Enum.UserInputType.Touch then
@@ -7247,7 +7303,7 @@ function Library:CreateWindow(...)
                 local dx = moveInput.Position.X - startPos.X;
                 local dy = moveInput.Position.Y - startPos.Y;
 
-                if (math.abs(dx) > 6) or (math.abs(dy) > 6) then
+                if (math.abs(dx) > 16) or (math.abs(dy) > 16) then
                     moved = true;
                 end;
 
@@ -7256,8 +7312,8 @@ function Library:CreateWindow(...)
 
                 OpenButton.AnchorPoint = Vector2.zero;
                 OpenButton.Position = UDim2.fromOffset(
-                    math.clamp(startAbs.X + dx, 6, math.max(6, VP.X - W - 6)),
-                    math.clamp(startAbs.Y + dy, 6, math.max(6, VP.Y - H - 6))
+                    math.clamp(startAbs.X + dx, -20, math.max(-20, VP.X - W + 20)),
+                    math.clamp(startAbs.Y + dy, 0, math.max(0, VP.Y - H))
                 );
             end;
         end);
@@ -7269,6 +7325,7 @@ function Library:CreateWindow(...)
                 Disconnect();
                 if not moved then
                     Library:Toggle();
+                    task.defer(function() SyncOpenButton(Outer.Visible) end);
                 end;
             end;
         end);
