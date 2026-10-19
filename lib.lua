@@ -110,8 +110,6 @@ end
 local IsPC = (InputService.KeyboardEnabled and InputService.MouseEnabled);
 local IsMobile = (InputService.TouchEnabled and not IsPC);
 local IsTouch = IsMobile;
-Library.IsMobile = IsMobile;
-Library.IsPC = IsPC;
 
 -- agrandit les zones tactiles (un doigt ≠ une souris)
 local function TouchPad(Height)
@@ -133,6 +131,8 @@ local function ClampToScreen(Position, Size)
 end;
 
 local Library = {
+    IsMobile = IsMobile;
+    IsPC = IsPC;
     Registry = {};
     RegistryMap = {};
 
