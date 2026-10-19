@@ -7426,7 +7426,16 @@ function Library:CreateWindow(...)
         end;
     end));
 
-    Library:GiveSignal(InputService.InputEnded:Connect(function(input)
+    Library:GiveSignal(OpenButton.Activated:Connect(function()
+        if not hasDragged then
+            task.spawn(function()
+                Library:Toggle();
+                SyncOpenButton(Outer.Visible);
+            end);
+        end;
+    end));
+
+    local function OnInputEnd(input)
         if not isDragging then return; end;
         local isMatch = (input == dragInput)
             or (dragInput and dragInput.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseButton1)
@@ -7435,15 +7444,14 @@ function Library:CreateWindow(...)
         if isMatch then
             isDragging = false;
             dragInput = nil;
-            if not hasDragged then
-                task.spawn(function()
-                    Library:Toggle();
-                    SyncOpenButton(Outer.Visible);
-                end);
-            end;
-            hasDragged = false;
+            task.delay(0.08, function()
+                hasDragged = false;
+            end);
         end;
-    end));
+    end;
+
+    Library:GiveSignal(OpenButton.InputEnded:Connect(OnInputEnd));
+    Library:GiveSignal(InputService.InputEnded:Connect(OnInputEnd));
 
     if Config.AutoShow and not Outer.Visible then
         Outer.Visible = true;
