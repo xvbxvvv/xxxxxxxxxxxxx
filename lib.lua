@@ -1,12 +1,28 @@
+if not game:IsLoaded() then
+    game.Loaded:Wait();
+end;
+
+if getgenv and getgenv().Library and getgenv().Library.Unload then
+    pcall(function()
+        getgenv().Library:Unload();
+    end);
+end;
+
 local InputService = game:GetService('UserInputService');
 local TextService = game:GetService('TextService');
 local CoreGui = game:GetService('CoreGui');
 local Teams = game:GetService('Teams');
 local Players = game:GetService('Players');
-local RunService = game:GetService('RunService')
+local RunService = game:GetService('RunService');
 local TweenService = game:GetService('TweenService');
 local RenderStepped = RunService.RenderStepped;
+
 local LocalPlayer = Players.LocalPlayer;
+while not LocalPlayer do
+    task.wait(0.1);
+    LocalPlayer = Players.LocalPlayer;
+end;
+
 local Mouse = LocalPlayer:GetMouse();
 
 -- Helpers de type d'input (pattern Library 5)
@@ -24,13 +40,29 @@ local function IsDragInput(Input)
             or Input.UserInputState == Enum.UserInputState.Change);
 end;
 
+local function GetHudParent()
+    local ok, h = pcall(function() return gethui and gethui() end);
+    if ok and h then return h end;
+    return CoreGui;
+end;
+
 local ProtectGui = protectgui or (syn and syn.protect_gui) or (function() end);
 
 local ScreenGui = Instance.new('ScreenGui');
+ScreenGui.Name = 'GamesenseUI';
+ScreenGui.ResetOnSpawn = false;
 ProtectGui(ScreenGui);
 
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global;
-ScreenGui.Parent = CoreGui;
+
+local okParent = pcall(function()
+    ScreenGui.Parent = GetHudParent();
+end);
+if not okParent or not ScreenGui.Parent then
+    pcall(function()
+        ScreenGui.Parent = LocalPlayer:WaitForChild('PlayerGui', 5) or CoreGui;
+    end);
+end;
 
 local Toggles = {};
 local Options = {};
@@ -300,14 +332,23 @@ function Library:Create(Class, Properties)
         _Instance = Instance.new(Class);
     end;
 
+    local parent = nil;
     for Property, Value in next, Properties do
-        _Instance[Property] = Value;
+        if Property == 'Parent' then
+            parent = Value;
+        else
+            _Instance[Property] = Value;
+        end;
     end;
 
     if Library.FontFace and (_Instance:IsA('TextLabel') or _Instance:IsA('TextBox') or _Instance:IsA('TextButton')) then
         pcall(function()
             _Instance.FontFace = Library.FontFace;
         end);
+    end;
+
+    if parent ~= nil then
+        _Instance.Parent = parent;
     end;
 
     return _Instance;
@@ -5901,7 +5942,7 @@ function Library:CreateWindow(...)
         BorderColor3 = Color3.new(0, 0, 0);
         Position = Config.Position,
         Size = GetFittedSize(),
-        Visible = false,
+        Visible = (Config.AutoShow == true),
         ZIndex = 1;
         Parent = ScreenGui;
     });
@@ -7052,12 +7093,12 @@ function Library:CreateWindow(...)
         Size = UDim2.new(0, 0, 0, 0);
         Visible = true;
         Text = '';
-        Modal = false;
+        Modal = (Config.AutoShow == true);
         Parent = ScreenGui;
     });
 
     local TransparencyCache = {};
-    local Toggled = false;
+    local Toggled = (Config.AutoShow == true);
     local Fading = false;
 
     function Library:Toggle()
@@ -7065,10 +7106,16 @@ function Library:CreateWindow(...)
             return;
         end;
 
-        local FadeTime = Config.MenuFadeTime;
+        local FadeTime = Config.MenuFadeTime or 0;
         Fading = true;
         Toggled = (not Toggled);
         ModalElement.Modal = Toggled;
+
+        if (not FadeTime) or FadeTime <= 0 then
+            Outer.Visible = Toggled;
+            Fading = false;
+            return;
+        end;
 
         if Toggled then
             -- A bit scuffed, but if we're going from not toggled -> toggled we want to show the frame immediately so that the fade is visible.
@@ -7105,7 +7152,9 @@ function Library:CreateWindow(...)
                     continue;
                 end;
 
-                TweenService:Create(Desc, TweenInfo.new(FadeTime, Enum.EasingStyle.Linear), { [Prop] = Toggled and Cache[Prop] or 1 }):Play();
+                pcall(function()
+                    TweenService:Create(Desc, TweenInfo.new(FadeTime, Enum.EasingStyle.Linear), { [Prop] = Toggled and Cache[Prop] or 1 }):Play();
+                end);
             end;
         end;
 
@@ -7218,7 +7267,9 @@ function Library:CreateWindow(...)
         end);
     end));
 
-    if Config.AutoShow then task.spawn(Library.Toggle) end
+    if Config.AutoShow and not Outer.Visible then
+        Outer.Visible = true;
+    end;
 
     -- Support universel du défilement à la molette de la souris (Mouse Wheel Scrolling)
     local function SmoothScroll(frame, wheelDelta)
@@ -7466,8 +7517,8 @@ local function OnPlayerChange()
     end;
 end;
 
-Players.PlayerAdded:Connect(OnPlayerChange);
-Players.PlayerRemoving:Connect(OnPlayerChange);
+table.insert(Library.Signals, Players.PlayerAdded:Connect(OnPlayerChange));
+table.insert(Library.Signals, Players.PlayerRemoving:Connect(OnPlayerChange));
 
 getgenv().Library = Library
 
