@@ -147,6 +147,8 @@ local Library = {
         Players = 'rbxassetid://7743876054',
         players = 'rbxassetid://7743876054',
         Profile = 'rbxassetid://7743876054',
+        spoofer = 'rbxassetid://7743876054',
+        Spoofer = 'rbxassetid://7743876054',
         Default = 'rbxassetid://7734053495',
         crosshair = 'rbxassetid://7733765307',
         Crosshair = 'rbxassetid://7733765307',
@@ -4561,7 +4563,7 @@ do
             Position = UDim2.new(1, -8, 0, 8);
             Size = UDim2.new(0, 24, 0, 24);
             BackgroundColor3 = Color3.fromRGB(24, 24, 30);
-            Text = '⟲';
+            Text = 'x';
             TextColor3 = Color3.fromRGB(200, 200, 210);
             TextSize = 14;
             ZIndex = 12;
@@ -4587,18 +4589,6 @@ do
         end);
 
         Library:AddToolTip('Reset 3D camera angle', ResetBtn);
-
-        local HintLabel = Library:CreateLabel({
-            AnchorPoint = Vector2.new(0, 1);
-            Position = UDim2.new(0, 8, 1, -6);
-            Size = UDim2.new(1, -16, 0, 12);
-            Text = '🖱️ Drag to rotate • 🔍 Scroll to zoom';
-            TextSize = 10;
-            TextColor3 = Color3.fromRGB(130, 130, 145);
-            TextXAlignment = Enum.TextXAlignment.Left;
-            ZIndex = 11;
-            Parent = Outer;
-        });
 
         local ESPPreviewObj = {
             Outer = Outer;
