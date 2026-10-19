@@ -135,6 +135,8 @@ local Library = {
         visuals = 'rbxassetid://7733774602',
         Misc = 'rbxassetid://7734053495',
         misc = 'rbxassetid://7734053495',
+        sparkles = 'rbxassetid://7734053495',
+        Sparkles = 'rbxassetid://7734053495',
         Settings = 'rbxassetid://7734053495',
         settings = 'rbxassetid://7734053495',
         gear = 'rbxassetid://7734053495',
@@ -4009,6 +4011,42 @@ do
                 model:PivotTo(CFrame.new(0, 0, 0) * CFrame.Angles(0, math.pi, 0));
             end);
 
+            -- Fixer et aligner tous les accessoires (cheveux, chapeaux, visage) aux membres correspondants
+            pcall(function()
+                for _, acc in ipairs(model:GetDescendants()) do
+                    if acc:IsA('Accessory') then
+                        local handle = acc:FindFirstChild('Handle')
+                        if handle and handle:IsA('BasePart') then
+                            handle.Anchored = true;
+                            handle.CanCollide = false;
+                            local att = handle:FindFirstChildOfClass('Attachment');
+                            local targetPart = nil;
+                            local targetAtt = nil;
+                            if att then
+                                for _, part in ipairs(model:GetChildren()) do
+                                    if part:IsA('BasePart') then
+                                        local found = part:FindFirstChild(att.Name);
+                                        if found and found:IsA('Attachment') then
+                                            targetPart = part;
+                                            targetAtt = found;
+                                            break;
+                                        end;
+                                    end;
+                                end;
+                            end;
+                            if targetPart and targetAtt and att then
+                                handle.CFrame = targetPart.CFrame * targetAtt.CFrame * att.CFrame:Inverse();
+                            else
+                                local head = model:FindFirstChild('Head');
+                                if head then
+                                    handle.CFrame = head.CFrame * CFrame.new(0, 0.25, 0.25);
+                                end;
+                            end;
+                        end;
+                    end;
+                end;
+            end);
+
             local cf, size = model:GetBoundingBox();
             TargetCenter = cf.Position;
             Distance = math.max(size.Y * 1.6, 7.8);
@@ -6329,6 +6367,8 @@ function Library:CreateWindow(...)
             ResolvedIcon = Library.Icons[Name] or Library.Icons.Default;
         elseif Library.Icons[ResolvedIcon] then
             ResolvedIcon = Library.Icons[ResolvedIcon];
+        elseif type(ResolvedIcon) == 'string' and not ResolvedIcon:find('rbxasset') then
+            ResolvedIcon = Library.Icons[Name] or Library.Icons.Default or 'rbxassetid://7734053495';
         end;
 
         local lowerName = Name:lower();
