@@ -5659,6 +5659,12 @@ local SaveManager = {} do
 			if not (option and option.Type and self.Parser[option.Type]) then continue end
 			table.insert(data.objects, self.Parser[option.Type].Save(idx, option))
 		end
+		if self.CustomSave then
+			local okCustom, customData = pcall(self.CustomSave)
+			if okCustom and customData then
+				data.custom = customData
+			end
+		end
 		local success, encoded = pcall(httpService.JSONEncode, httpService, data)
 		if not success then return false, 'failed to encode data' end
 		local writeOk, writeErr = pcall(function() writefile(fullPath, encoded) end)
@@ -5682,6 +5688,11 @@ local SaveManager = {} do
 					pcall(function() self.Parser[option.type].Load(option.idx, option) end)
 				end)
 			end
+		end
+		if decoded.custom and self.CustomLoad then
+			task.spawn(function()
+				pcall(self.CustomLoad, decoded.custom)
+			end)
 		end
 		return true
 	end
