@@ -122,6 +122,10 @@ local IsPC = (InputService.KeyboardEnabled and InputService.MouseEnabled);
 local IsMobile = (InputService.TouchEnabled and not IsPC);
 local IsTouch = IsMobile;
 
+if IsMobile then
+    TweenConfig.Dropdown = 0;
+end;
+
 -- agrandit les zones tactiles (un doigt ≠ une souris)
 local function TouchPad(Height)
     return IsMobile and math.max(Height, 26) or Height;
@@ -2915,7 +2919,8 @@ do
             Selectable = false;
             ScrollingDirection = Enum.ScrollingDirection.Y;
             ElasticBehavior = Enum.ElasticBehavior.WhenScrollable;
-            ScrollBarThickness = IsMobile and 8 or 4;
+            ScrollBarThickness = IsMobile and 14 or 5;
+            ScrollBarImageTransparency = 0;
             ScrollBarImageColor3 = Library.AccentColor;
             TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
             BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
@@ -3248,13 +3253,17 @@ do
             if not obj or not obj.Visible then return false; end;
             local pos = obj.AbsolutePosition;
             local size = obj.AbsoluteSize;
-            return (x >= (pos.X - 4) and x <= (pos.X + size.X + 4) and y >= (pos.Y - 4) and y <= (pos.Y + size.Y + 4));
+            local h = size.Y;
+            if obj == ListOuter then
+                h = math.max(h, GetTargetDropdownHeight());
+            end;
+            return (x >= (pos.X - 12) and x <= (pos.X + size.X + 12) and y >= (pos.Y - 12) and y <= (pos.Y + h + 12));
         end;
 
         Library:GiveSignal(InputService.InputBegan:Connect(function(Input)
             if not IsMouseInput(Input) then return; end;
             if not IsOpen then return; end;
-            if (os.clock() - LastOpenTime) < 0.25 then return; end;
+            if (os.clock() - LastOpenTime) < (IsMobile and 0.35 or 0.25) then return; end;
 
             local PX = Input.Position.X;
             local PY = Input.Position.Y;
@@ -5151,6 +5160,7 @@ function Library:SetWatermarkIcon(url)
 end;
 
 function Library:SetFont(url, filename)
+    if IsMobile then return end; -- Préserve les polices natives stables sur mobile pour éliminer les freezes / crashs
     url = url or Library.CustomFontUrl
     filename = filename or Library.CustomFontName or 'Minecraftia-Regular.ttf'
 
@@ -5161,11 +5171,13 @@ function Library:SetFont(url, filename)
             if okFont and fontObj then
                 Library.FontFace = fontObj
                 if ScreenGui then
-                    for _, inst in ipairs(ScreenGui:GetDescendants()) do
-                        if inst:IsA('TextLabel') or inst:IsA('TextBox') or inst:IsA('TextButton') then
-                            pcall(function() inst.FontFace = fontObj end)
+                    task.spawn(function()
+                        for _, inst in ipairs(ScreenGui:GetDescendants()) do
+                            if inst:IsA('TextLabel') or inst:IsA('TextBox') or inst:IsA('TextButton') then
+                                pcall(function() inst.FontFace = fontObj end)
+                            end
                         end
-                    end
+                    end)
                 end
             end
         end
@@ -6610,8 +6622,11 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0, 8, 0, 8);
             Size = UDim2.new(0.5, -12, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            ScrollBarThickness = 0;
-            ScrollBarImageTransparency = 1;
+            ScrollBarThickness = IsMobile and 8 or 0;
+            ScrollBarImageTransparency = IsMobile and 0.25 or 1;
+            ScrollBarImageColor3 = Library.AccentColor;
+            TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
             ScrollingDirection = Enum.ScrollingDirection.Y;
             Selectable = false;
             Active = true;
@@ -6625,8 +6640,11 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0.5, 4, 0, 8);
             Size = UDim2.new(0.5, -12, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            ScrollBarThickness = 0;
-            ScrollBarImageTransparency = 1;
+            ScrollBarThickness = IsMobile and 8 or 0;
+            ScrollBarImageTransparency = IsMobile and 0.25 or 1;
+            ScrollBarImageColor3 = Library.AccentColor;
+            TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
             ScrollingDirection = Enum.ScrollingDirection.Y;
             Selectable = false;
             Active = true;
@@ -6640,8 +6658,11 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0, 8, 0, 8);
             Size = UDim2.new(1, -16, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            ScrollBarThickness = 0;
-            ScrollBarImageTransparency = 1;
+            ScrollBarThickness = IsMobile and 8 or 0;
+            ScrollBarImageTransparency = IsMobile and 0.25 or 1;
+            ScrollBarImageColor3 = Library.AccentColor;
+            TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
             ScrollingDirection = Enum.ScrollingDirection.Y;
             Selectable = false;
             Active = true;
@@ -6649,6 +6670,10 @@ function Library:CreateWindow(...)
             ZIndex = 2;
             Parent = TabFrame;
         });
+
+        Library:AddToRegistry(LeftSide, { ScrollBarImageColor3 = 'AccentColor' });
+        Library:AddToRegistry(RightSide, { ScrollBarImageColor3 = 'AccentColor' });
+        Library:AddToRegistry(FullSide, { ScrollBarImageColor3 = 'AccentColor' });
 
         Tab.LeftSide = LeftSide;
         Tab.RightSide = RightSide;
