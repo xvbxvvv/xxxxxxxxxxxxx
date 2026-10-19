@@ -6449,11 +6449,8 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0, 8, 0, 8);
             Size = UDim2.new(0.5, -12, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            ScrollBarThickness = 6;
-            ScrollBarImageColor3 = Library.AccentColor;
-            TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
-            BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
-            MidImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            ScrollBarThickness = 0;
+            ScrollBarImageTransparency = 1;
             ScrollingDirection = Enum.ScrollingDirection.Y;
             Selectable = false;
             Active = true;
@@ -6467,11 +6464,8 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0.5, 4, 0, 8);
             Size = UDim2.new(0.5, -12, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            ScrollBarThickness = 6;
-            ScrollBarImageColor3 = Library.AccentColor;
-            TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
-            BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
-            MidImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            ScrollBarThickness = 0;
+            ScrollBarImageTransparency = 1;
             ScrollingDirection = Enum.ScrollingDirection.Y;
             Selectable = false;
             Active = true;
@@ -6485,27 +6479,14 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0, 8, 0, 8);
             Size = UDim2.new(1, -16, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            ScrollBarThickness = 6;
-            ScrollBarImageColor3 = Library.AccentColor;
-            TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
-            BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
-            MidImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            ScrollBarThickness = 0;
+            ScrollBarImageTransparency = 1;
             ScrollingDirection = Enum.ScrollingDirection.Y;
             Selectable = false;
             Active = true;
             Visible = false;
             ZIndex = 2;
             Parent = TabFrame;
-        });
-
-        Library:AddToRegistry(LeftSide, {
-            ScrollBarImageColor3 = 'AccentColor';
-        });
-        Library:AddToRegistry(RightSide, {
-            ScrollBarImageColor3 = 'AccentColor';
-        });
-        Library:AddToRegistry(FullSide, {
-            ScrollBarImageColor3 = 'AccentColor';
         });
 
         Tab.LeftSide = LeftSide;
