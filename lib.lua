@@ -163,9 +163,6 @@ local Library = {
 
     Black = Color3.new(0, 0, 0);
     Font = Enum.Font.Code;
-    FontFace = nil;
-    CustomFontUrl = 'https://github.com/kiciahook-org/v3-assets/raw/refs/heads/main/Minecraftia-Regular.ttf';
-    CustomFontName = 'Minecraftia-Regular.ttf';
 
     OpenedFrames = {};
     DependencyBoxes = {};
@@ -359,12 +356,6 @@ function Library:Create(Class, Properties)
         end;
     end;
 
-    if Library.FontFace and (_Instance:IsA('TextLabel') or _Instance:IsA('TextBox') or _Instance:IsA('TextButton')) then
-        pcall(function()
-            _Instance.FontFace = Library.FontFace;
-        end);
-    end;
-
     if parent ~= nil then
         _Instance.Parent = parent;
     end;
@@ -391,12 +382,6 @@ function Library:CreateLabel(Properties, IsHud)
         TextSize = 16;
         TextStrokeTransparency = 0;
     });
-
-    if Library.FontFace then
-        pcall(function()
-            _Instance.FontFace = Library.FontFace;
-        end);
-    end;
 
     Library:ApplyTextStroke(_Instance);
 
@@ -5158,35 +5143,6 @@ function Library:SetWatermarkIcon(url)
         end
     end)
 end;
-
-function Library:SetFont(url, filename)
-    if IsMobile then return end; -- Préserve les polices natives stables sur mobile pour éliminer les freezes / crashs
-    url = url or Library.CustomFontUrl
-    filename = filename or Library.CustomFontName or 'Minecraftia-Regular.ttf'
-
-    task.spawn(function()
-        local asset = Library:GetCustomAsset(url, filename)
-        if asset and asset ~= '' then
-            local okFont, fontObj = pcall(Font.new, asset, Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-            if okFont and fontObj then
-                Library.FontFace = fontObj
-                if ScreenGui then
-                    task.spawn(function()
-                        for _, inst in ipairs(ScreenGui:GetDescendants()) do
-                            if inst:IsA('TextLabel') or inst:IsA('TextBox') or inst:IsA('TextButton') then
-                                pcall(function() inst.FontFace = fontObj end)
-                            end
-                        end
-                    end)
-                end
-            end
-        end
-    end)
-end;
-
-task.spawn(function()
-    Library:SetFont();
-end);
 
 Library.WatermarkTitle = 'gamesense.pub';
 local WatermarkFps = 60;
