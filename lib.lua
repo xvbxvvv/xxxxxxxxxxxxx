@@ -2982,10 +2982,8 @@ do
             end;
 
             local Count = 0;
-            local max_render = (#Values > 60) and 60 or #Values;
 
             for Idx, Value in next, Values do
-                if Count >= max_render then break; end;
                 local Table = {};
 
                 Count = Count + 1;
