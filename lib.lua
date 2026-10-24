@@ -1,39 +1,13 @@
-if not game:IsLoaded() then
-    local loaded = false;
-    local c;
-    pcall(function()
-        c = game.Loaded:Connect(function() loaded = true; end);
-    end);
-    local t0 = tick();
-    while not loaded and (tick() - t0 < 3) do
-        if game:IsLoaded() then break; end;
-        task.wait(0.1);
-    end;
-    if c then pcall(function() c:Disconnect(); end); end;
-end;
-
-if getgenv and getgenv().Library and getgenv().Library.Unload then
-    pcall(function()
-        getgenv().Library:Unload();
-    end);
-end;
-
+-- [lib_modern.lua] Modernized by Ritmada — task.wait, event-driven inputs, normalized icons, O(1) registry
 local InputService = game:GetService('UserInputService');
 local TextService = game:GetService('TextService');
 local CoreGui = game:GetService('CoreGui');
 local Teams = game:GetService('Teams');
 local Players = game:GetService('Players');
-local RunService = game:GetService('RunService');
+local RunService = game:GetService('RunService')
 local TweenService = game:GetService('TweenService');
 local RenderStepped = RunService.RenderStepped;
-
 local LocalPlayer = Players.LocalPlayer;
-local t0_lp = tick();
-while not LocalPlayer and (tick() - t0_lp < 3) do
-    task.wait(0.1);
-    LocalPlayer = Players.LocalPlayer;
-end;
-
 local Mouse = LocalPlayer:GetMouse();
 
 -- Helpers de type d'input (pattern Library 5)
@@ -51,29 +25,13 @@ local function IsDragInput(Input)
             or Input.UserInputState == Enum.UserInputState.Change);
 end;
 
-local function GetHudParent()
-    local ok, h = pcall(function() return gethui and gethui() end);
-    if ok and h then return h end;
-    return CoreGui;
-end;
-
 local ProtectGui = protectgui or (syn and syn.protect_gui) or (function() end);
 
 local ScreenGui = Instance.new('ScreenGui');
-ScreenGui.Name = 'GamesenseUI';
-ScreenGui.ResetOnSpawn = false;
 ProtectGui(ScreenGui);
 
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global;
-
-local okParent = pcall(function()
-    ScreenGui.Parent = GetHudParent();
-end);
-if not okParent or not ScreenGui.Parent then
-    pcall(function()
-        ScreenGui.Parent = LocalPlayer:FindFirstChild('PlayerGui') or CoreGui;
-    end);
-end;
+ScreenGui.Parent = CoreGui;
 
 local Toggles = {};
 local Options = {};
@@ -118,13 +76,8 @@ end
 --============================================================
 --  Mobile / touch helpers
 --============================================================
-local IsPC = (InputService.KeyboardEnabled and InputService.MouseEnabled);
-local IsMobile = (InputService.TouchEnabled and not IsPC);
-local IsTouch = IsMobile;
-
-if IsMobile then
-    TweenConfig.Dropdown = 0;
-end;
+local IsMobile = (InputService.TouchEnabled and not InputService.MouseEnabled);
+local IsTouch = (InputService.TouchEnabled or InputService.GamepadEnabled);
 
 -- agrandit les zones tactiles (un doigt ≠ une souris)
 local function TouchPad(Height)
@@ -146,8 +99,6 @@ local function ClampToScreen(Position, Size)
 end;
 
 local Library = {
-    IsMobile = IsMobile;
-    IsPC = IsPC;
     Registry = {};
     RegistryMap = {};
 
@@ -156,64 +107,36 @@ local Library = {
     FontColor = Color3.fromRGB(255, 255, 255);
     MainColor = Color3.fromRGB(20, 20, 20);
     BackgroundColor = Color3.fromRGB(12, 12, 12);
-    AccentColor = Color3.fromRGB(255, 255, 255);
-    AccentColorDark = Color3.fromRGB(160, 160, 160);
+    AccentColor = Color3.fromRGB(90, 175, 255);
+    AccentColorDark = Color3.fromRGB(55, 110, 195);
     OutlineColor = Color3.fromRGB(40, 40, 40);
     RiskColor = Color3.fromRGB(255, 50, 50);
 
     Black = Color3.new(0, 0, 0);
     Font = Enum.Font.Code;
+    FontFace = nil;
+    CustomFontUrl = 'https://github.com/kiciahook-org/v3-assets/raw/refs/heads/main/Minecraftia-Regular.ttf';
+    CustomFontName = 'Minecraftia-Regular.ttf';
 
     OpenedFrames = {};
     DependencyBoxes = {};
 
     Signals = {};
     ScreenGui = ScreenGui;
+    Options = Options;
+    Toggles = Toggles;
 
+    -- Icons normalisées (résolution insensible à la casse via Library:ResolveIcon)
     Icons = {
-        Rage = 'rbxassetid://18484264435',
-        Combat = 'rbxassetid://18484264435',
-        Legit = 'rbxassetid://7733765307',
-        AntiAim = 'rbxassetid://7734056608',
-        ['Anti-Aim'] = 'rbxassetid://7734056608',
-        Visual = 'rbxassetid://7733774602',
-        visual = 'rbxassetid://7733774602',
-        Visuals = 'rbxassetid://7733774602',
-        visuals = 'rbxassetid://7733774602',
-        Misc = 'rbxassetid://7734053495',
-        misc = 'rbxassetid://7734053495',
-        sparkles = 'rbxassetid://7734053495',
-        Sparkles = 'rbxassetid://7734053495',
-        Settings = 'rbxassetid://7734053495',
-        settings = 'rbxassetid://7734053495',
-        gear = 'rbxassetid://7734053495',
-        wrench = 'rbxassetid://7734053495',
-        ['UI Settings'] = 'rbxassetid://7734053495',
-        Configs = 'rbxassetid://7733799901',
-        Config = 'rbxassetid://7733799901',
-        Players = 'rbxassetid://7743876054',
-        players = 'rbxassetid://7743876054',
-        Profile = 'rbxassetid://7743876054',
-        spoofer = 'rbxassetid://7743876054',
-        Spoofer = 'rbxassetid://7743876054',
-        Default = 'rbxassetid://7734053495',
-        crosshair = 'rbxassetid://7733765307',
-        Crosshair = 'rbxassetid://7733765307',
-        Aimbot = 'rbxassetid://7733765307',
-        aimbot = 'rbxassetid://7733765307',
-        eye = 'rbxassetid://7733774602',
-        Eye = 'rbxassetid://7733774602',
-        ESP = 'rbxassetid://7733774602',
-        esp = 'rbxassetid://7733774602',
-        circle = 'rbxassetid://5881046614',
-        FOV = 'rbxassetid://5881046614',
-        maximize = 'rbxassetid://5881046614',
-        prediction = 'rbxassetid://5881046614',
-        Prediction = 'rbxassetid://5881046614',
-        skin = 'rbxassetid://7734056672',
-        Skin = 'rbxassetid://7734056672',
-        ['Skin Changer'] = 'rbxassetid://7734056672',
-        shirt = 'rbxassetid://7734056672',
+        rage    = 'rbxassetid://18484264435';
+        legit   = 'rbxassetid://7733765307';
+        antiaim = 'rbxassetid://7734056608';
+        visuals = 'rbxassetid://7733774602';
+        misc    = 'rbxassetid://7734053495';
+        configs = 'rbxassetid://7733799901';
+        players = 'rbxassetid://7743876054';
+        skin    = 'rbxassetid://7734056672';
+        fov     = 'rbxassetid://5881046614';
     };
     ShowCustomCursor = false;
 
@@ -347,17 +270,14 @@ function Library:Create(Class, Properties)
         _Instance = Instance.new(Class);
     end;
 
-    local parent = nil;
     for Property, Value in next, Properties do
-        if Property == 'Parent' then
-            parent = Value;
-        else
-            _Instance[Property] = Value;
-        end;
+        _Instance[Property] = Value;
     end;
 
-    if parent ~= nil then
-        _Instance.Parent = parent;
+    if Library.FontFace and (_Instance:IsA('TextLabel') or _Instance:IsA('TextBox') or _Instance:IsA('TextButton')) then
+        pcall(function()
+            _Instance.FontFace = Library.FontFace;
+        end);
     end;
 
     return _Instance;
@@ -382,6 +302,12 @@ function Library:CreateLabel(Properties, IsHud)
         TextSize = 16;
         TextStrokeTransparency = 0;
     });
+
+    if Library.FontFace then
+        pcall(function()
+            _Instance.FontFace = Library.FontFace;
+        end);
+    end;
 
     Library:ApplyTextStroke(_Instance);
 
@@ -522,26 +448,24 @@ function Library:AddToolTip(InfoStr, HoverInstance)
     });
 
     local IsHovering = false
+    local _tooltipMoveConn;
 
     HoverInstance.MouseEnter:Connect(function()
-        if Library:MouseIsOverOpenedFrame() then
-            return
-        end
-
-        IsHovering = true
-
-        Tooltip.Position = UDim2.fromOffset(Mouse.X + 15, Mouse.Y + 12)
-        Tooltip.Visible = true
-
-        while IsHovering do
-            RunService.Heartbeat:Wait()
-            Tooltip.Position = UDim2.fromOffset(Mouse.X + 15, Mouse.Y + 12)
-        end
+        if Library:MouseIsOverOpenedFrame() then return end;
+        IsHovering = true;
+        Tooltip.Position = UDim2.fromOffset(Mouse.X + 15, Mouse.Y + 12);
+        Tooltip.Visible = true;
+        _tooltipMoveConn = InputService.InputChanged:Connect(function(mv)
+            if mv.UserInputType == Enum.UserInputType.MouseMovement then
+                Tooltip.Position = UDim2.fromOffset(mv.Position.X + 15, mv.Position.Y + 12);
+            end;
+        end);
     end)
 
     HoverInstance.MouseLeave:Connect(function()
-        IsHovering = false
-        Tooltip.Visible = false
+        IsHovering = false;
+        Tooltip.Visible = false;
+        if _tooltipMoveConn then _tooltipMoveConn:Disconnect(); _tooltipMoveConn = nil; end;
     end)
 end
 
@@ -654,22 +578,25 @@ end;
 
 function Library:RemoveFromRegistry(Instance)
     local Data = Library.RegistryMap[Instance];
+    if not Data then return; end;
 
-    if Data then
-        for Idx = #Library.Registry, 1, -1 do
-            if Library.Registry[Idx] == Data then
-                table.remove(Library.Registry, Idx);
-            end;
+    local reg = Library.Registry;
+    for i = #reg, 1, -1 do
+        if reg[i] == Data then
+            table.remove(reg, i);
+            break; -- O(n) avec early exit
         end;
-
-        for Idx = #Library.HudRegistry, 1, -1 do
-            if Library.HudRegistry[Idx] == Data then
-                table.remove(Library.HudRegistry, Idx);
-            end;
-        end;
-
-        Library.RegistryMap[Instance] = nil;
     end;
+
+    local hud = Library.HudRegistry;
+    for i = #hud, 1, -1 do
+        if hud[i] == Data then
+            table.remove(hud, i);
+            break;
+        end;
+    end;
+
+    Library.RegistryMap[Instance] = nil;
 end;
 
 function Library:UpdateColorsUsingRegistry()
@@ -1192,6 +1119,7 @@ do
 
             Library:SafeCallback(ColorPicker.Callback, ColorPicker.Value);
             Library:SafeCallback(ColorPicker.Changed, ColorPicker.Value);
+            if Library.UpdateESPPreviews then Library:UpdateESPPreviews(); end;
         end;
 
         function ColorPicker:OnChanged(Func)
@@ -1231,42 +1159,50 @@ do
         end;
 
         SatVibMap.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-                while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                    local MinX = SatVibMap.AbsolutePosition.X;
-                    local MaxX = MinX + SatVibMap.AbsoluteSize.X;
-                    local MouseX = math.clamp(Mouse.X, MinX, MaxX);
-
-                    local MinY = SatVibMap.AbsolutePosition.Y;
-                    local MaxY = MinY + SatVibMap.AbsoluteSize.Y;
-                    local MouseY = math.clamp(Mouse.Y, MinY, MaxY);
-
-                    ColorPicker.Sat = (MouseX - MinX) / (MaxX - MinX);
-                    ColorPicker.Vib = 1 - ((MouseY - MinY) / (MaxY - MinY));
-                    ColorPicker:Display();
-
-                    RenderStepped:Wait();
-                end;
-
-                Library:AttemptSave();
+            if Input.UserInputType ~= Enum.UserInputType.MouseButton1 then return; end;
+            local _svMoveConn, _svEndConn;
+            local function _svDisconnect()
+                if _svMoveConn then _svMoveConn:Disconnect(); _svMoveConn = nil; end;
+                if _svEndConn then _svEndConn:Disconnect(); _svEndConn = nil; end;
             end;
+            _svMoveConn = InputService.InputChanged:Connect(function(mv)
+                if mv.UserInputType ~= Enum.UserInputType.MouseMovement then return; end;
+                local MinX = SatVibMap.AbsolutePosition.X;
+                local MaxX = MinX + SatVibMap.AbsoluteSize.X;
+                local MinY = SatVibMap.AbsolutePosition.Y;
+                local MaxY = MinY + SatVibMap.AbsoluteSize.Y;
+                ColorPicker.Sat = (math.clamp(mv.Position.X, MinX, MaxX) - MinX) / (MaxX - MinX);
+                ColorPicker.Vib = 1 - ((math.clamp(mv.Position.Y, MinY, MaxY) - MinY) / (MaxY - MinY));
+                ColorPicker:Display();
+            end);
+            _svEndConn = InputService.InputEnded:Connect(function(ev)
+                if ev.UserInputType == Enum.UserInputType.MouseButton1 then
+                    _svDisconnect();
+                    Library:AttemptSave();
+                end;
+            end);
         end);
 
         HueSelectorInner.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-                while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                    local MinY = HueSelectorInner.AbsolutePosition.Y;
-                    local MaxY = MinY + HueSelectorInner.AbsoluteSize.Y;
-                    local MouseY = math.clamp(Mouse.Y, MinY, MaxY);
-
-                    ColorPicker.Hue = ((MouseY - MinY) / (MaxY - MinY));
-                    ColorPicker:Display();
-
-                    RenderStepped:Wait();
-                end;
-
-                Library:AttemptSave();
+            if Input.UserInputType ~= Enum.UserInputType.MouseButton1 then return; end;
+            local _hueMoveConn, _hueEndConn;
+            local function _hueDisconnect()
+                if _hueMoveConn then _hueMoveConn:Disconnect(); _hueMoveConn = nil; end;
+                if _hueEndConn then _hueEndConn:Disconnect(); _hueEndConn = nil; end;
             end;
+            _hueMoveConn = InputService.InputChanged:Connect(function(mv)
+                if mv.UserInputType ~= Enum.UserInputType.MouseMovement then return; end;
+                local MinY = HueSelectorInner.AbsolutePosition.Y;
+                local MaxY = MinY + HueSelectorInner.AbsoluteSize.Y;
+                ColorPicker.Hue = (math.clamp(mv.Position.Y, MinY, MaxY) - MinY) / (MaxY - MinY);
+                ColorPicker:Display();
+            end);
+            _hueEndConn = InputService.InputEnded:Connect(function(ev)
+                if ev.UserInputType == Enum.UserInputType.MouseButton1 then
+                    _hueDisconnect();
+                    Library:AttemptSave();
+                end;
+            end);
         end);
 
         DisplayFrame.InputBegan:Connect(function(Input)
@@ -1285,21 +1221,25 @@ do
 
         if TransparencyBoxInner then
             TransparencyBoxInner.InputBegan:Connect(function(Input)
-                if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                        local MinX = TransparencyBoxInner.AbsolutePosition.X;
-                        local MaxX = MinX + TransparencyBoxInner.AbsoluteSize.X;
-                        local MouseX = math.clamp(Mouse.X, MinX, MaxX);
-
-                        ColorPicker.Transparency = 1 - ((MouseX - MinX) / (MaxX - MinX));
-
-                        ColorPicker:Display();
-
-                        RenderStepped:Wait();
-                    end;
-
-                    Library:AttemptSave();
+                if Input.UserInputType ~= Enum.UserInputType.MouseButton1 then return; end;
+                local _trMoveConn, _trEndConn;
+                local function _trDisconnect()
+                    if _trMoveConn then _trMoveConn:Disconnect(); _trMoveConn = nil; end;
+                    if _trEndConn then _trEndConn:Disconnect(); _trEndConn = nil; end;
                 end;
+                _trMoveConn = InputService.InputChanged:Connect(function(mv)
+                    if mv.UserInputType ~= Enum.UserInputType.MouseMovement then return; end;
+                    local MinX = TransparencyBoxInner.AbsolutePosition.X;
+                    local MaxX = MinX + TransparencyBoxInner.AbsoluteSize.X;
+                    ColorPicker.Transparency = 1 - ((math.clamp(mv.Position.X, MinX, MaxX) - MinX) / (MaxX - MinX));
+                    ColorPicker:Display();
+                end);
+                _trEndConn = InputService.InputEnded:Connect(function(ev)
+                    if ev.UserInputType == Enum.UserInputType.MouseButton1 then
+                        _trDisconnect();
+                        Library:AttemptSave();
+                    end;
+                end);
             end);
         end;
 
@@ -1578,11 +1518,11 @@ do
                         Text = Text .. '.';
                         DisplayLabel.Text = Text;
 
-                        wait(0.4);
+                        task.wait(0.4);
                     end;
                 end);
 
-                wait(0.2);
+                task.wait(0.2);
 
                 local Event;
                 Event = InputService.InputBegan:Connect(function(Input)
@@ -1845,20 +1785,25 @@ do
 
         local function InitEvents(Button)
             local function WaitForEvent(event, timeout, validator)
-                local bindable = Instance.new('BindableEvent')
-                local connection = event:Once(function(...)
-
-                    if type(validator) == 'function' and validator(...) then
-                        bindable:Fire(true)
-                    else
-                        bindable:Fire(false)
-                    end
-                end)
-                task.delay(timeout, function()
-                    connection:disconnect()
-                    bindable:Fire(false)
-                end)
-                return bindable.Event:Wait()
+                local result = false;
+                local done = false;
+                local conn;
+                conn = event:Once(function(...)
+                    if not done then
+                        result = type(validator) == 'function' and validator(...) or true;
+                        done = true;
+                    end;
+                end);
+                local elapsed = 0;
+                local step = 1/30;
+                while not done and elapsed < timeout do
+                    task.wait(step);
+                    elapsed = elapsed + step;
+                end;
+                if not done then
+                    pcall(function() conn:Disconnect() end);
+                end;
+                return result;
             end
 
             local function ValidateClick(Input)
@@ -2066,7 +2011,7 @@ do
             Parent = TextBoxInner;
         });
 
-        local Container = Library:Create('Frame', {
+        local TextBoxContainer = Library:Create('Frame', {
             BackgroundTransparency = 1;
             ClipsDescendants = true;
 
@@ -2094,7 +2039,7 @@ do
             TextXAlignment = Enum.TextXAlignment.Left;
 
             ZIndex = 7;
-            Parent = Container;
+            Parent = TextBoxContainer;
         });
 
         Library:ApplyTextStroke(Box);
@@ -2136,7 +2081,7 @@ do
 
         local function Update()
             local PADDING = 2
-            local reveal = Container.AbsoluteSize.X
+            local reveal = TextBoxContainer.AbsoluteSize.X
 
             if not Box:IsFocused() or Box.TextBounds.X <= reveal - 2 * PADDING then
                 -- we aren't focused, or we fit so be normal
@@ -2360,6 +2305,7 @@ do
             Library:SafeCallback(Toggle.Callback, Toggle.Value);
             Library:SafeCallback(Toggle.Changed, Toggle.Value);
             Library:UpdateDependencyBoxes();
+            if Library.UpdateESPPreviews then Library:UpdateESPPreviews(); end;
         end;
 
         ToggleRegion.InputBegan:Connect(function(Input)
@@ -2573,26 +2519,33 @@ do
 
             Library:SafeCallback(Slider.Callback, Slider.Value);
             Library:SafeCallback(Slider.Changed, Slider.Value);
+            if Library.UpdateESPPreviews then Library:UpdateESPPreviews(); end;
         end;
 
         local function OnSliderDown(Input)
             if not IsClickInput(Input) then return end;
             if Library:MouseIsOverOpenedFrame(Input.Position.X, Input.Position.Y) then return end;
 
-            local mPos = Mouse.X;
+            local mPos = Input.Position.X;
             local gPos = Fill.Size.X.Offset;
             local Diff = mPos - (Fill.AbsolutePosition.X + gPos);
 
-            while IsDragInput(Input) do
-                local nX = math.clamp(gPos + (Mouse.X - mPos) + Diff, 0, Slider.MaxSize);
+            local _slMoveConn, _slEndConn;
+            local function _slDisconnect()
+                if _slMoveConn then _slMoveConn:Disconnect(); _slMoveConn = nil; end;
+                if _slEndConn then _slEndConn:Disconnect(); _slEndConn = nil; end;
+            end;
+
+            _slMoveConn = InputService.InputChanged:Connect(function(mv)
+                if mv.UserInputType ~= Enum.UserInputType.MouseMovement
+                    and mv.UserInputType ~= Enum.UserInputType.Touch then return; end;
+                local nX = math.clamp(gPos + (mv.Position.X - mPos) + Diff, 0, Slider.MaxSize);
                 local nValue = Slider:GetValueFromXOffset(nX);
                 local OldValue = Slider.Value;
                 Slider.Value = nValue;
-
                 local dX = math.ceil(Library:MapValue(Slider.Value, Slider.Min, Slider.Max, 0, Slider.MaxSize));
                 Fill.Size = UDim2.new(0, dX, 1, 0);
                 HideBorderRight.Visible = not (dX == Slider.MaxSize or dX == 0);
-
                 if Info.Compact then
                     DisplayLabel.Text = Info.Text .. ': ' .. Slider.Value .. (Info.Suffix or '');
                 elseif Info.HideMax then
@@ -2600,16 +2553,18 @@ do
                 else
                     DisplayLabel.Text = string.format('%s/%s', Slider.Value .. (Info.Suffix or ''), Slider.Max .. (Info.Suffix or ''));
                 end;
-
                 if nValue ~= OldValue then
                     Library:SafeCallback(Slider.Callback, Slider.Value);
                     Library:SafeCallback(Slider.Changed, Slider.Value);
                 end;
-
-                RenderStepped:Wait();
-            end;
-
-            Library:AttemptSave();
+            end);
+            _slEndConn = InputService.InputEnded:Connect(function(ev)
+                if ev.UserInputType == Enum.UserInputType.MouseButton1
+                    or ev.UserInputType == Enum.UserInputType.Touch then
+                    _slDisconnect();
+                    Library:AttemptSave();
+                end;
+            end);
         end;
 
         -- zone de drag élargie au doigt (mobile uniquement, invisible, hors layout)
@@ -2762,16 +2717,6 @@ do
             Parent = DropdownInner;
         });
 
-        local DropdownClickButton = Library:Create('TextButton', {
-            BackgroundTransparency = 1;
-            BorderSizePixel = 0;
-            Size = UDim2.new(1, 0, 1, 0);
-            Text = '';
-            ZIndex = 9;
-            Active = true;
-            Parent = DropdownOuter;
-        });
-
         Library:OnHighlight(DropdownOuter, DropdownOuter,
             { BorderColor3 = 'AccentColor' },
             { BorderColor3 = 'Black' }
@@ -2781,15 +2726,13 @@ do
             Library:AddToolTip(Info.Tooltip, DropdownOuter)
         end
 
-        local MAX_DROPDOWN_ITEMS = Info.MaxItems or 6;
+        local MAX_DROPDOWN_ITEMS = 8;
 
         local ListOuter = Library:Create('Frame', {
             BackgroundColor3 = Color3.new(0, 0, 0);
             BorderSizePixel = 0;
-            ZIndex = 100;
-            Active = true;
+            ZIndex = 20;
             Visible = false;
-            ClipsDescendants = true;
             Parent = ScreenGui;
         });
 
@@ -2802,12 +2745,9 @@ do
             Color = Library.OutlineColor;
             Thickness = 1;
             ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
-            ZIndex = 101;
+            ZIndex = 22;
             Parent = ListOuter;
         });
-
-        local IsOpen = false;
-        local IsAnimating = false;
 
         local function GetTargetDropdownHeight()
             local count = #Dropdown.Values;
@@ -2820,26 +2760,14 @@ do
             local VP = (Cam and Cam.ViewportSize.X > 0) and Cam.ViewportSize or ScreenGui.AbsoluteSize;
             local TargetH = forcedH or GetTargetDropdownHeight();
 
-            -- Limite basse sécurisée : bas de la fenêtre UI ou bas de l'écran
-            local winBottom = VP.Y - 14;
-            local winTop = 14;
-            if Library and Library.Window and Library.Window.Holder then
-                local h = Library.Window.Holder;
-                winBottom = math.min(winBottom, h.AbsolutePosition.Y + h.AbsoluteSize.Y - 14);
-                winTop = math.max(winTop, h.AbsolutePosition.Y + 14);
-            end;
-
             local Y = DropdownOuter.AbsolutePosition.Y + DropdownOuter.AbsoluteSize.Y + 2;
             local OpensUpward = false;
 
-            local spaceBelow = winBottom - Y;
-            local spaceAbove = DropdownOuter.AbsolutePosition.Y - winTop - 2;
-
-            -- Si la liste dépasse en bas de la fenêtre/écran ou si l'espace au-dessus est plus grand
-            if (Y + TargetH) > winBottom or (spaceBelow < TargetH and spaceAbove > spaceBelow) then
+            -- Si la liste dépasse en bas de l'écran (notamment en mode fenêtré), on l'ouvre vers le haut
+            if (Y + TargetH) > (VP.Y - 8) then
                 local UpY = DropdownOuter.AbsolutePosition.Y - TargetH - 2;
-                if UpY >= winTop or spaceAbove > 0 then
-                    Y = math.max(winTop, UpY);
+                if UpY >= 4 or (DropdownOuter.AbsolutePosition.Y > (VP.Y / 2)) then
+                    Y = math.max(4, UpY);
                     OpensUpward = true;
                 end;
             end;
@@ -2860,19 +2788,13 @@ do
         RecalculateListPosition();
         RecalculateListSize();
 
-        DropdownOuter:GetPropertyChangedSignal('AbsolutePosition'):Connect(function()
-            if IsOpen and not IsAnimating then
-                RecalculateListPosition();
-            end;
-        end);
+        DropdownOuter:GetPropertyChangedSignal('AbsolutePosition'):Connect(RecalculateListPosition);
 
         local ListInner = Library:Create('Frame', {
             BackgroundColor3 = Library.MainColor;
             BorderSizePixel = 0;
             Size = UDim2.new(1, 0, 1, 0);
-            ZIndex = 101;
-            Active = true;
-            ClipsDescendants = true;
+            ZIndex = 21;
             Parent = ListOuter;
         });
 
@@ -2899,17 +2821,14 @@ do
             BorderSizePixel = 0;
             CanvasSize = UDim2.new(0, 0, 0, 0);
             Size = UDim2.new(1, 0, 1, 0);
-            ZIndex = 102;
-            Active = true;
-            Selectable = false;
-            ScrollingDirection = Enum.ScrollingDirection.Y;
-            ElasticBehavior = Enum.ElasticBehavior.WhenScrollable;
-            ScrollBarThickness = IsMobile and 14 or 5;
-            ScrollBarImageTransparency = 0;
-            ScrollBarImageColor3 = Library.AccentColor;
-            TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
-            BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            ZIndex = 21;
             Parent = ListInner;
+
+            TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png',
+            BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png',
+
+            ScrollBarThickness = 3,
+            ScrollBarImageColor3 = Library.AccentColor,
         });
 
         Library:AddToRegistry(Scrolling, {
@@ -2978,8 +2897,8 @@ do
                     BorderColor3 = Library.OutlineColor;
                     BorderMode = Enum.BorderMode.Middle;
                     Size = UDim2.new(1, -1, 0, DROPDOWN_ITEM_H);
-                    ZIndex = 103;
-                    Active = false;
+                    ZIndex = 23;
+                    Active = true;
                     Parent = Scrolling;
                 });
 
@@ -2987,6 +2906,7 @@ do
                     CornerRadius = UDim.new(0, 3);
                     Parent = Button;
                 });
+
 
                 Library:AddToRegistry(Button, {
                     BackgroundColor3 = 'MainColor';
@@ -3000,23 +2920,13 @@ do
                     TextSize = 14;
                     Text = Value;
                     TextXAlignment = Enum.TextXAlignment.Left;
-                    ZIndex = 105;
+                    ZIndex = 25;
                     Parent = Button;
                 });
 
-                local ItemClickBtn = Library:Create('TextButton', {
-                    BackgroundTransparency = 1;
-                    BorderSizePixel = 0;
-                    Size = UDim2.new(1, 0, 1, 0);
-                    Text = '';
-                    ZIndex = 106;
-                    Active = true;
-                    Parent = Button;
-                });
-
-                Library:OnHighlight(Button, ItemClickBtn,
-                    { BorderColor3 = 'AccentColor', ZIndex = 104 },
-                    { BorderColor3 = 'OutlineColor', ZIndex = 103 }
+                Library:OnHighlight(Button, Button,
+                    { BorderColor3 = 'AccentColor', ZIndex = 24 },
+                    { BorderColor3 = 'OutlineColor', ZIndex = 23 }
                 );
 
                 local Selected;
@@ -3038,44 +2948,43 @@ do
                     Library.RegistryMap[ButtonLabel].Properties.TextColor3 = Selected and 'AccentColor' or 'FontColor';
                 end;
 
-                ItemClickBtn.Activated:Connect(function()
-                    local Try = not Selected;
+                ButtonLabel.InputBegan:Connect(function(Input)
+                    if IsClickInput(Input) then
+                        local Try = not Selected;
 
-                    if Dropdown:GetActiveValues() == 1 and (not Try) and (not Info.AllowNull) then
-                        return;
-                    end;
-
-                    if Info.Multi then
-                        Selected = Try;
-
-                        if Selected then
-                            Dropdown.Value[Value] = true;
+                        if Dropdown:GetActiveValues() == 1 and (not Try) and (not Info.AllowNull) then
                         else
-                            Dropdown.Value[Value] = nil;
-                        end;
-                    else
-                        Selected = Try;
+                            if Info.Multi then
+                                Selected = Try;
 
-                        if Selected then
-                            Dropdown.Value = Value;
-                        else
-                            Dropdown.Value = nil;
-                        end;
+                                if Selected then
+                                    Dropdown.Value[Value] = true;
+                                else
+                                    Dropdown.Value[Value] = nil;
+                                end;
+                            else
+                                Selected = Try;
 
-                        for _, OtherButton in next, Buttons do
-                            OtherButton:UpdateButton();
-                        end;
+                                if Selected then
+                                    Dropdown.Value = Value;
+                                else
+                                    Dropdown.Value = nil;
+                                end;
 
-                        Dropdown:CloseDropdown();
+                                for _, OtherButton in next, Buttons do
+                                    OtherButton:UpdateButton();
+                                end;
+                            end;
+
+                            Table:UpdateButton();
+                            Dropdown:Display();
+
+                            Library:SafeCallback(Dropdown.Callback, Dropdown.Value);
+                            Library:SafeCallback(Dropdown.Changed, Dropdown.Value);
+
+                            Library:AttemptSave();
+                        end;
                     end;
-
-                    Table:UpdateButton();
-                    Dropdown:Display();
-
-                    Library:SafeCallback(Dropdown.Callback, Dropdown.Value);
-                    Library:SafeCallback(Dropdown.Changed, Dropdown.Value);
-
-                    Library:AttemptSave();
                 end);
 
                 Table:UpdateButton();
@@ -3100,94 +3009,56 @@ do
 
         Dropdown.Refresh = Dropdown.SetValues;
 
-        local LastOpenTime = 0;
-        local LastToggleTime = 0;
-
         function Dropdown:OpenDropdown()
-            if Library.ActiveDropdown and Library.ActiveDropdown ~= Dropdown then
-                pcall(function() Library.ActiveDropdown:CloseDropdown(); end);
-            end;
-            Library.ActiveDropdown = Dropdown;
-
-            IsOpen = true;
-            IsAnimating = true;
-            LastOpenTime = os.clock();
-
             local TargetH = GetTargetDropdownHeight();
-            local OpensUpward, finalH = RecalculateListPosition(TargetH);
-            TargetH = finalH or TargetH;
+            local OpensUpward = RecalculateListPosition(TargetH);
+            RecalculateListSize(TargetH);
 
-            ListOuter.ClipsDescendants = true;
             ListOuter.Visible = true;
             Library.OpenedFrames[ListOuter] = true;
-
-            local finalPos = ListOuter.Position;
-            local width = DropdownOuter.AbsoluteSize.X;
 
             if TweenConfig.Dropdown > 0 then
                 Tween(DropdownArrow, TweenConfig.Dropdown, { Rotation = 180 },
                     Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
 
+                ListOuter.Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, 0);
                 if OpensUpward then
-                    local startY = finalPos.Y.Offset + TargetH;
-                    ListOuter.Position = UDim2.fromOffset(finalPos.X.Offset, startY);
-                    ListOuter.Size = UDim2.fromOffset(width, 0);
+                    local bottomY = DropdownOuter.AbsolutePosition.Y - 2;
+                    ListOuter.Position = UDim2.fromOffset(DropdownOuter.AbsolutePosition.X, bottomY);
                     Tween(ListOuter, TweenConfig.Dropdown, {
-                        Size = UDim2.fromOffset(width, TargetH),
-                        Position = finalPos
+                        Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, TargetH),
+                        Position = UDim2.fromOffset(DropdownOuter.AbsolutePosition.X, bottomY - TargetH)
                     }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
                 else
-                    ListOuter.Position = finalPos;
-                    ListOuter.Size = UDim2.fromOffset(width, 0);
                     Tween(ListOuter, TweenConfig.Dropdown, {
-                        Size = UDim2.fromOffset(width, TargetH)
+                        Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, TargetH)
                     }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
                 end;
-
-                task.delay(TweenConfig.Dropdown, function()
-                    if IsOpen then
-                        ListOuter.Size = UDim2.fromOffset(width, TargetH);
-                        ListOuter.Position = finalPos;
-                        IsAnimating = false;
-                    end;
-                end);
             else
                 DropdownArrow.Rotation = 180;
-                ListOuter.Size = UDim2.fromOffset(width, TargetH);
-                ListOuter.Position = finalPos;
-                IsAnimating = false;
             end;
         end;
 
         function Dropdown:CloseDropdown()
-            if not IsOpen and not ListOuter.Visible then return; end;
-            IsOpen = false;
-            IsAnimating = true;
-
-            if Library.ActiveDropdown == Dropdown then
-                Library.ActiveDropdown = nil;
-            end;
             Library.OpenedFrames[ListOuter] = nil;
 
             if TweenConfig.Dropdown > 0 then
                 Tween(DropdownArrow, TweenConfig.Dropdown, { Rotation = 0 },
                     Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
 
-                local currentW = ListOuter.Size.X.Offset > 0 and ListOuter.Size.X.Offset or DropdownOuter.AbsoluteSize.X;
+                local CurrentSize = ListOuter.Size;
                 Tween(ListOuter, TweenConfig.Dropdown, {
-                    Size = UDim2.fromOffset(currentW, 0)
+                    Size = UDim2.fromOffset(CurrentSize.X.Offset, 0)
                 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
 
                 task.delay(TweenConfig.Dropdown, function()
-                    if not IsOpen then
+                    if ListOuter and not Library.OpenedFrames[ListOuter] then
                         ListOuter.Visible = false;
-                        IsAnimating = false;
                     end;
                 end);
             else
                 ListOuter.Visible = false;
                 DropdownArrow.Rotation = 0;
-                IsAnimating = false;
             end;
         end;
 
@@ -3219,45 +3090,30 @@ do
 
             Library:SafeCallback(Dropdown.Callback, Dropdown.Value);
             Library:SafeCallback(Dropdown.Changed, Dropdown.Value);
+            if Library.UpdateESPPreviews then Library:UpdateESPPreviews(); end;
         end;
 
-        local function ToggleDropdown()
-            if (os.clock() - LastToggleTime) < 0.15 then return; end;
-            LastToggleTime = os.clock();
-
-            if IsOpen then
+        DropdownOuter.InputBegan:Connect(function(Input)
+            if not IsClickInput(Input) then return end;
+            if Library:MouseIsOverOpenedFrame(Input.Position.X, Input.Position.Y) then return end;
+            if ListOuter.Visible then
                 Dropdown:CloseDropdown();
             else
                 Dropdown:OpenDropdown();
             end;
-        end;
-
-        DropdownClickButton.Activated:Connect(ToggleDropdown);
-
-        local function PointInGui(obj, x, y)
-            if not obj or not obj.Visible then return false; end;
-            local pos = obj.AbsolutePosition;
-            local size = obj.AbsoluteSize;
-            local h = size.Y;
-            if obj == ListOuter then
-                h = math.max(h, GetTargetDropdownHeight());
-            end;
-            return (x >= (pos.X - 12) and x <= (pos.X + size.X + 12) and y >= (pos.Y - 12) and y <= (pos.Y + h + 12));
-        end;
+        end);
 
         Library:GiveSignal(InputService.InputBegan:Connect(function(Input)
-            if not IsMouseInput(Input) then return; end;
-            if not IsOpen then return; end;
-            if (os.clock() - LastOpenTime) < (IsMobile and 0.35 or 0.25) then return; end;
-
+            if not IsMouseInput(Input) then return end;
             local PX = Input.Position.X;
             local PY = Input.Position.Y;
+            local AbsPos, AbsSize = ListOuter.AbsolutePosition, ListOuter.AbsoluteSize;
 
-            if PointInGui(DropdownOuter, PX, PY) or PointInGui(ListOuter, PX, PY) then
-                return;
+            if PX < AbsPos.X or PX > AbsPos.X + AbsSize.X
+                or PY < (AbsPos.Y - 20 - 1) or PY > AbsPos.Y + AbsSize.Y then
+
+                Dropdown:CloseDropdown();
             end;
-
-            Dropdown:CloseDropdown();
         end));
 
         Dropdown:BuildDropdownList();
@@ -3441,14 +3297,8 @@ do
             Position = UDim2.new(0, 2, 0, SearchHeight + 2);
             Size = UDim2.new(1, -4, 1, -(SearchHeight + ResetHeight + 4));
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            Active = true;
-            Selectable = false;
-            ScrollingDirection = Enum.ScrollingDirection.Y;
-            ElasticBehavior = Enum.ElasticBehavior.WhenScrollable;
-            ScrollBarThickness = IsMobile and 8 or 4;
+            ScrollBarThickness = 3;
             ScrollBarImageColor3 = Library.OutlineColor;
-            TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
-            BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
             ZIndex = 6;
             Parent = Outer;
         });
@@ -3500,7 +3350,7 @@ do
                 });
                 Library:ApplyTextStroke(Btn);
 
-                Btn.Activated:Connect(function()
+                Btn.MouseButton1Click:Connect(function()
                     if List.Multi then
                         List.Value[val] = not List.Value[val];
                     else
@@ -4054,22 +3904,27 @@ do
         return RenderObj;
     end;
 
-    function Funcs:AddESPPreview(Idx, Info)
-        if type(Idx) == 'table' and Info == nil then
-            Info = Idx;
-            Idx = Info.Idx or ('ESPPreview_' .. tostring(math.random(10000, 99999)));
-        end;
-        Info = Info or {};
-        local Groupbox = self;
-        local Container = Groupbox.Container;
+    Library.ESPPreviews = Library.ESPPreviews or {};
 
+    function Library:UpdateESPPreviews()
+        if not Library.ESPPreviews then return end;
+        for _, prev in ipairs(Library.ESPPreviews) do
+            if prev and prev.SyncWithToggles then
+                pcall(function() prev:SyncWithToggles() end);
+            end;
+        end;
+    end;
+
+    function Library:CreateESPPreviewWidget(Container, Idx, Info)
+        Info = Info or {};
         local Height = Info.Height or 260;
+        local Standalone = Info.Standalone or false;
 
         local Outer = Library:Create('Frame', {
             BackgroundColor3 = Info.BackgroundColor3 or Color3.fromRGB(14, 14, 18);
             BorderSizePixel = 0;
-            Size = UDim2.new(1, -4, 0, Height);
-            ZIndex = 5;
+            Size = Standalone and UDim2.new(1, 0, 1, 0) or UDim2.new(1, -4, 0, Height);
+            ZIndex = Standalone and 112 or 5;
             ClipsDescendants = true;
             Parent = Container;
         });
@@ -4086,13 +3941,15 @@ do
             Parent = Outer;
         });
 
+        local baseZ = Outer.ZIndex or 5;
+
         local Viewport = Library:Create('ViewportFrame', {
             BackgroundTransparency = 1;
             Size = UDim2.new(1, 0, 1, 0);
             LightColor = Color3.fromRGB(240, 240, 240);
-            Ambient = Color3.fromRGB(150, 150, 160);
+            Ambient = Color3.fromRGB(160, 160, 170);
             LightDirection = Vector3.new(1, -2, -1);
-            ZIndex = 6;
+            ZIndex = baseZ + 1;
             Parent = Outer;
         });
 
@@ -4121,21 +3978,25 @@ do
 
         local OriginalProps = {};
         local CurrentModel = nil;
+        local CurrentMode = '3D'; -- '3D' or 'Image'
 
         local function SetupModel(model)
             if not model then return end;
             if CurrentModel then
-                CurrentModel:Destroy();
+                pcall(function() CurrentModel:Destroy() end);
                 table.clear(OriginalProps);
             end;
 
-            model.Parent = World;
             CurrentModel = model;
+            model.Parent = World;
 
+            -- Enregistrer les proprietes initiales de chaque piece (cheveux, vetements, corps)
             for _, part in ipairs(model:GetDescendants()) do
                 if part:IsA('BasePart') then
-                    part.Anchored = true;
                     part.CanCollide = false;
+                    part.CanTouch = false;
+                    part.CanQuery = false;
+                    part.CastShadow = false;
                     OriginalProps[part] = {
                         Color = part.Color;
                         Material = part.Material;
@@ -4144,131 +4005,117 @@ do
                 end;
             end;
 
-            -- Pose statique neutre par défaut (T-pose / Neutral stand)
-            local root = model:FindFirstChild('HumanoidRootPart') or model:FindFirstChild('Torso') or model.PrimaryPart;
-            if root then
-                model.PrimaryPart = root;
-                root.CFrame = CFrame.new(0, 0, 0);
-            end;
-
-            -- Normaliser l'orientation des membres pour avoir un mannequin propre et fixe
-            pcall(function()
-                for _, motor in ipairs(model:GetDescendants()) do
-                    if motor:IsA('Motor6D') then
-                        motor.Transform = CFrame.new();
-                    end;
-                end;
-            end);
-
-            -- Orientation: face forward toward camera
-            pcall(function()
-                model:PivotTo(CFrame.new(0, 0, 0) * CFrame.Angles(0, math.pi, 0));
-            end);
-
-            -- Fixer et aligner tous les accessoires (cheveux, chapeaux, visage) aux membres correspondants
-            pcall(function()
-                for _, acc in ipairs(model:GetDescendants()) do
-                    if acc:IsA('Accessory') then
-                        local handle = acc:FindFirstChild('Handle')
-                        if handle and handle:IsA('BasePart') then
-                            handle.Anchored = true;
-                            handle.CanCollide = false;
-                            local att = handle:FindFirstChildOfClass('Attachment');
-                            local targetPart = nil;
-                            local targetAtt = nil;
-                            if att then
-                                for _, part in ipairs(model:GetChildren()) do
-                                    if part:IsA('BasePart') then
-                                        local found = part:FindFirstChild(att.Name);
-                                        if found and found:IsA('Attachment') then
-                                            targetPart = part;
-                                            targetAtt = found;
-                                            break;
-                                        end;
-                                    end;
-                                end;
-                            end;
-                            if targetPart and targetAtt and att then
-                                handle.CFrame = targetPart.CFrame * targetAtt.CFrame * att.CFrame:Inverse();
-                            else
-                                local head = model:FindFirstChild('Head');
-                                if head then
-                                    handle.CFrame = head.CFrame * CFrame.new(0, 0.25, 0.25);
-                                end;
-                            end;
-                        end;
-                    end;
-                end;
-            end);
-
             local cf, size = model:GetBoundingBox();
             TargetCenter = cf.Position;
             Distance = math.max(size.Y * 1.6, 7.8);
             UpdateCamera();
         end;
 
-        -- Helper: strip all animation state from a model to give it a clean T-pose
-        local function StripAndTPose(model)
-            -- First destroy all animation drivers so no new poses are applied
-            for _, desc in ipairs(model:GetDescendants()) do
-                if desc:IsA('Script') or desc:IsA('LocalScript') or desc:IsA('Sound')
-                    or desc:IsA('Animator') or desc:IsA('AnimationController') then
-                    desc:Destroy();
-                elseif desc:IsA('BasePart') then
+        -- Helper pour cloner le personnage du joueur avec TOUS ses cheveux et accessoires UGC
+        local function CloneAndPrepareCharacter(char)
+            if not char then return nil end;
+            local oldArch = char.Archivable;
+            char.Archivable = true;
+            local clone = char:Clone();
+            char.Archivable = oldArch;
+            if not clone then return nil end;
+
+            -- Supprimer les armes / outils en main
+            for _, item in ipairs(clone:GetChildren()) do
+                if item:IsA('Tool') or item:IsA('HopperBin') then
+                    pcall(function() item:Destroy() end);
+                end;
+            end;
+
+            -- Supprimer les scripts, animateurs, sons, particules, highlights et GUIs
+            for _, desc in ipairs(clone:GetDescendants()) do
+                if desc:IsA('LuaSourceContainer') or desc:IsA('Animator')
+                    or desc:IsA('AnimationController') or desc:IsA('Sound')
+                    or desc:IsA('ParticleEmitter') or desc:IsA('Highlight')
+                    or desc:IsA('BillboardGui') or desc:IsA('SurfaceGui')
+                    or desc:IsA('Fire') or desc:IsA('Smoke') or desc:IsA('Sparkles') then
+                    pcall(function() desc:Destroy() end);
+                end;
+            end;
+
+            local hum = clone:FindFirstChildOfClass('Humanoid');
+            if hum then
+                hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
+                hum.PlatformStand = true;
+            end;
+
+            -- Remettre les Motor6D en T-Pose neutre SANS ancrer les pieces
+            -- Cela permet aux AccessoryWelds des cheveux et chapeaux de suivre la tete !
+            for _, desc in ipairs(clone:GetDescendants()) do
+                if desc:IsA('Motor6D') then
+                    pcall(function() desc.Transform = CFrame.new() end);
+                end;
+            end;
+
+            local root = clone:FindFirstChild('HumanoidRootPart') or clone:FindFirstChild('Torso') or clone.PrimaryPart;
+            if root then
+                clone.PrimaryPart = root;
+            end;
+
+            -- Pivoter le modele complet (corps + cheveux + chapeaux) vers le centre face a la camera
+            pcall(function()
+                clone:PivotTo(CFrame.new(0, 0, 0) * CFrame.Angles(0, math.pi, 0));
+            end);
+
+            -- Ancrer les BaseParts seulement APRES le deplacement pour fixer la pose
+            for _, desc in ipairs(clone:GetDescendants()) do
+                if desc:IsA('BasePart') then
                     desc.Anchored = true;
                     desc.CanCollide = false;
                     desc.Velocity = Vector3.zero;
                     desc.RotVelocity = Vector3.zero;
                 end;
             end;
-            -- Reset Motor6D Transform to CFrame.new() = identity (T-pose).
-            -- Transform is the runtime animation offset applied on top of C0/C1.
-            -- Clearing it removes the "current animation frame" pose from the model.
-            for _, desc in ipairs(model:GetDescendants()) do
-                if desc:IsA('Motor6D') then
-                    pcall(function() desc.Transform = CFrame.new(); end);
-                end;
-            end;
-            local hum = model:FindFirstChildOfClass('Humanoid');
-            if hum then
-                hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
-                hum.PlatformStand = true;
-            end;
+
+            return clone;
         end;
 
-        local function CreateStaticPreviewDummy()
-            -- 1. Charger un mannequin propre via CreateHumanoidModelFromUserId
+        local function RefreshDummy()
+            local char = LocalPlayer and LocalPlayer.Character;
+            if char then
+                local clone = CloneAndPrepareCharacter(char);
+                if clone then
+                    SetupModel(clone);
+                    return;
+                end;
+            end;
+
             if LocalPlayer and LocalPlayer.UserId then
                 local ok, dummy = pcall(function()
                     return Players:CreateHumanoidModelFromUserId(LocalPlayer.UserId);
                 end);
                 if ok and dummy then
-                    StripAndTPose(dummy);
-                    return dummy;
+                    local prepared = CloneAndPrepareCharacter(dummy);
+                    if prepared then
+                        SetupModel(prepared);
+                        dummy:Destroy();
+                        return;
+                    else
+                        SetupModel(dummy);
+                        return;
+                    end;
                 end;
             end;
+        end;
 
-            -- 2. Fallback clone du personnage — on clone PUIS on T-pose
-            local char = LocalPlayer and LocalPlayer.Character;
-            if char then
-                local oldArch = char.Archivable;
-                char.Archivable = true;
-                local clone = char:Clone();
-                char.Archivable = oldArch;
-                if clone then
-                    StripAndTPose(clone);
-                    return clone;
-                end;
-            end;
-
-            return nil;
+        if LocalPlayer then
+            LocalPlayer.CharacterAdded:Connect(function()
+                task.wait(0.6);
+                RefreshDummy();
+            end);
         end;
 
         task.spawn(function()
-            local dummy = CreateStaticPreviewDummy();
-            if dummy then
-                SetupModel(dummy);
+            if not (LocalPlayer and LocalPlayer.Character) then
+                pcall(function() LocalPlayer.CharacterAdded:Wait() end);
+                task.wait(0.5);
             end;
+            RefreshDummy();
         end);
 
         -- Mouse & Touch Rotation Controls
@@ -4324,7 +4171,7 @@ do
             local absH = Viewport.AbsoluteSize.Y;
             if absW <= 10 or absH <= 10 then
                 absW = Outer.AbsoluteSize.X;
-                absH = Height;
+                absH = Outer.AbsoluteSize.Y;
             end;
             if absW <= 10 then absW = 220 end;
             if absH <= 10 then absH = Height or 260 end;
@@ -4344,15 +4191,28 @@ do
         local Overlay = Library:Create('Frame', {
             BackgroundTransparency = 1;
             Size = UDim2.new(1, 0, 1, 0);
-            ZIndex = 8;
+            ZIndex = baseZ + 3;
             Parent = Outer;
+        });
+
+        -- 2D Silhouette / Mannequin Image preview
+        local ImagePreview = Library:Create('ImageLabel', {
+            BackgroundTransparency = 1;
+            Size = UDim2.new(0, 108, 0, 186);
+            AnchorPoint = Vector2.new(0.5, 0.5);
+            Position = UDim2.new(0.5, 0, 0.5, 0);
+            Image = 'rbxassetid://10850239462';
+            ScaleType = Enum.ScaleType.Fit;
+            Visible = false;
+            ZIndex = baseZ + 2;
+            Parent = Overlay;
         });
 
         -- Dynamic 3D Skeleton Wireframe Overlay
         local SkeletonContainer = Library:Create('Frame', {
             BackgroundTransparency = 1;
             Size = UDim2.new(1, 0, 1, 0);
-            ZIndex = 8;
+            ZIndex = baseZ + 3;
             Parent = Overlay;
         });
 
@@ -4386,13 +4246,15 @@ do
         };
 
         UpdateSkeleton = function()
-            if not SkeletonEnabled or not CurrentModel then
+            if not SkeletonEnabled or not CurrentModel or CurrentMode == 'Image' then
+                SkeletonContainer.Visible = false;
                 for _, line in pairs(BoneLines) do
                     line.Visible = false;
                 end;
                 return;
             end;
 
+            SkeletonContainer.Visible = true;
             local isR15 = CurrentModel:FindFirstChild('UpperTorso') ~= nil;
             local boneDefs = isR15 and R15_Bones or R6_Bones;
 
@@ -4405,7 +4267,7 @@ do
                         BackgroundColor3 = SkeletonColor;
                         BorderSizePixel = 0;
                         AnchorPoint = Vector2.new(0.5, 0.5);
-                        ZIndex = 8;
+                        ZIndex = baseZ + 3;
                         Parent = SkeletonContainer;
                     });
                     Library:Create('UIStroke', {
@@ -4454,7 +4316,7 @@ do
             AnchorPoint = Vector2.new(0.5, 0.5);
             Position = UDim2.new(0.5, 0, 0.5, 0);
             Size = UDim2.new(0, 108, 0, 186);
-            ZIndex = 9;
+            ZIndex = baseZ + 4;
             Parent = Overlay;
         });
 
@@ -4470,7 +4332,7 @@ do
             BorderSizePixel = 0;
             Position = UDim2.new(0, 1, 0, 1);
             Size = UDim2.new(1, -2, 1, -2);
-            ZIndex = 9;
+            ZIndex = baseZ + 4;
             Parent = BoxMain;
         });
 
@@ -4486,7 +4348,7 @@ do
             BorderSizePixel = 0;
             Position = UDim2.new(0, -1, 0, -1);
             Size = UDim2.new(1, 2, 1, 2);
-            ZIndex = 9;
+            ZIndex = baseZ + 4;
             Parent = BoxMain;
         });
 
@@ -4502,7 +4364,7 @@ do
             BackgroundTransparency = 1;
             Size = UDim2.new(1, 0, 1, 0);
             Visible = false;
-            ZIndex = 9;
+            ZIndex = baseZ + 4;
             Parent = BoxMain;
         });
 
@@ -4517,7 +4379,7 @@ do
                 AnchorPoint = anchor;
                 Position = pos;
                 Size = size;
-                ZIndex = 9;
+                ZIndex = baseZ + 4;
                 Parent = CornerHolder;
             });
             Library:Create('UIStroke', {
@@ -4551,7 +4413,7 @@ do
             BorderSizePixel = 0;
             Position = UDim2.new(0, -7, 0, 0);
             Size = UDim2.new(0, 3, 1, 0);
-            ZIndex = 10;
+            ZIndex = baseZ + 5;
             Parent = BoxMain;
         });
 
@@ -4568,7 +4430,7 @@ do
             AnchorPoint = Vector2.new(0, 1);
             Position = UDim2.new(0, 0, 1, 0);
             Size = UDim2.new(1, 0, 1, 0);
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = HealthBarBg;
         });
 
@@ -4582,7 +4444,7 @@ do
             TextXAlignment = Enum.TextXAlignment.Right;
             TextStrokeTransparency = 0;
             TextStrokeColor3 = Color3.new(0, 0, 0);
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = HealthBarBg;
         });
 
@@ -4592,7 +4454,7 @@ do
             BorderSizePixel = 0;
             Position = UDim2.new(0, 0, 1, 2);
             Size = UDim2.new(1, 0, 0, 2.5);
-            ZIndex = 10;
+            ZIndex = baseZ + 5;
             Visible = false;
             Parent = BoxMain;
         });
@@ -4609,7 +4471,7 @@ do
             BorderSizePixel = 0;
             Position = UDim2.new(0, 0, 0, 0);
             Size = UDim2.new(1, 0, 1, 0);
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = AmmoBarBg;
         });
 
@@ -4623,7 +4485,7 @@ do
             TextStrokeTransparency = 0;
             TextStrokeColor3 = Color3.new(0, 0, 0);
             Visible = false;
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = AmmoBarBg;
         });
 
@@ -4632,12 +4494,12 @@ do
             AnchorPoint = Vector2.new(0.5, 1);
             Position = UDim2.new(0.5, 0, 0, -5);
             Size = UDim2.new(1, 60, 0, 14);
-            Text = (LocalPlayer and LocalPlayer.DisplayName) or 'LocalPlayer';
+            Text = (LocalPlayer and (LocalPlayer.DisplayName or LocalPlayer.Name)) or 'LocalPlayer';
             TextSize = 11;
             TextColor3 = Color3.fromRGB(255, 255, 255);
             TextStrokeTransparency = 0;
             TextStrokeColor3 = Color3.new(0, 0, 0);
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = BoxMain;
         });
 
@@ -4651,7 +4513,7 @@ do
             TextColor3 = Color3.fromRGB(220, 220, 230);
             TextStrokeTransparency = 0;
             TextStrokeColor3 = Color3.new(0, 0, 0);
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = BoxMain;
         });
 
@@ -4666,7 +4528,7 @@ do
             TextStrokeTransparency = 0;
             TextStrokeColor3 = Color3.new(0, 0, 0);
             Visible = false;
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = BoxMain;
         });
 
@@ -4675,7 +4537,7 @@ do
             BackgroundTransparency = 1;
             Position = UDim2.new(1, 6, 0, 0);
             Size = UDim2.new(0, 50, 1, 0);
-            ZIndex = 11;
+            ZIndex = baseZ + 6;
             Parent = BoxMain;
         });
 
@@ -4702,21 +4564,22 @@ do
                 TextStrokeTransparency = 0;
                 TextStrokeColor3 = Color3.new(0, 0, 0);
                 TextXAlignment = Enum.TextXAlignment.Left;
-                ZIndex = 11;
+                ZIndex = baseZ + 6;
                 Parent = FlagsHolder;
             });
             FlagLabels[flag.Key] = fl;
         end;
 
+        -- Bouton Reinitialiser l'angle camera
         local ResetBtn = Library:Create('TextButton', {
             AnchorPoint = Vector2.new(1, 0);
             Position = UDim2.new(1, -8, 0, 8);
             Size = UDim2.new(0, 24, 0, 24);
             BackgroundColor3 = Color3.fromRGB(24, 24, 30);
-            Text = 'x';
+            Text = '⟲';
             TextColor3 = Color3.fromRGB(200, 200, 210);
             TextSize = 14;
-            ZIndex = 12;
+            ZIndex = baseZ + 7;
             Parent = Outer;
         });
 
@@ -4740,11 +4603,80 @@ do
 
         Library:AddToolTip('Reset 3D camera angle', ResetBtn);
 
+        -- Bouton Bascule Mode 3D / 2D Image
+        local ModeBtn = Library:Create('TextButton', {
+            AnchorPoint = Vector2.new(1, 0);
+            Position = UDim2.new(1, -36, 0, 8);
+            Size = UDim2.new(0, 28, 0, 24);
+            BackgroundColor3 = Color3.fromRGB(24, 24, 30);
+            Text = '3D';
+            TextColor3 = Color3.fromRGB(0, 255, 140);
+            TextSize = 10;
+            Font = Enum.Font.GothamBold;
+            ZIndex = baseZ + 7;
+            Parent = Outer;
+        });
+
+        Library:Create('UICorner', {
+            CornerRadius = UDim.new(0, 4);
+            Parent = ModeBtn;
+        });
+
+        Library:Create('UIStroke', {
+            Color = Color3.fromRGB(48, 48, 56);
+            Thickness = 1;
+            Parent = ModeBtn;
+        });
+
+        Library:AddToolTip('Basculer entre skin 3D et image 2D', ModeBtn);
+
+        local HintLabel = Library:CreateLabel({
+            AnchorPoint = Vector2.new(0, 1);
+            Position = UDim2.new(0, 8, 1, -6);
+            Size = UDim2.new(1, -16, 0, 12);
+            Text = '🖱️ Drag to rotate • 🔍 Scroll to zoom';
+            TextSize = 10;
+            TextColor3 = Color3.fromRGB(130, 130, 145);
+            TextXAlignment = Enum.TextXAlignment.Left;
+            ZIndex = baseZ + 6;
+            Parent = Outer;
+        });
+
+        local function SetPreviewMode(mode)
+            if mode == 'Image' or mode == '2D' or mode == '2D Image' then
+                CurrentMode = 'Image';
+                ModeBtn.Text = '2D';
+                ModeBtn.TextColor3 = Color3.fromRGB(80, 180, 255);
+                Viewport.Visible = false;
+                ImagePreview.Visible = true;
+                SkeletonContainer.Visible = false;
+                HintLabel.Text = '🖼️ Mode Image 2D Mannequin';
+            else
+                CurrentMode = '3D';
+                ModeBtn.Text = '3D';
+                ModeBtn.TextColor3 = Color3.fromRGB(0, 255, 140);
+                Viewport.Visible = true;
+                ImagePreview.Visible = false;
+                SkeletonContainer.Visible = SkeletonEnabled;
+                HintLabel.Text = '🖱️ Drag to rotate • 🔍 Scroll to zoom';
+                UpdateSkeleton();
+            end;
+        end;
+
+        ModeBtn.MouseButton1Click:Connect(function()
+            if CurrentMode == '3D' then
+                SetPreviewMode('Image');
+            else
+                SetPreviewMode('3D');
+            end;
+        end);
+
         local ESPPreviewObj = {
             Outer = Outer;
             Viewport = Viewport;
             World = World;
             Camera = Camera;
+            ImagePreview = ImagePreview;
             BoxMain = BoxMain;
             BoxStrokeMain = BoxStrokeMain;
             CornerHolder = CornerHolder;
@@ -4762,6 +4694,34 @@ do
             FlagLabels = FlagLabels;
             SkeletonContainer = SkeletonContainer;
         };
+
+        function ESPPreviewObj:SetMode(mode)
+            SetPreviewMode(mode);
+        end;
+
+        function ESPPreviewObj:ToggleMode()
+            if CurrentMode == '3D' then
+                SetPreviewMode('Image');
+            else
+                SetPreviewMode('3D');
+            end;
+        end;
+
+        function ESPPreviewObj:GetMode()
+            return CurrentMode;
+        end;
+
+        function ESPPreviewObj:SetImage(assetId)
+            if not assetId or assetId == '' then
+                ImagePreview.Image = 'rbxassetid://10850239462';
+            else
+                ImagePreview.Image = Library:GetCustomAsset(assetId);
+            end;
+        end;
+
+        function ESPPreviewObj:RefreshModel()
+            RefreshDummy();
+        end;
 
         function ESPPreviewObj:SetBox(visible, color, style)
             BoxMain.Visible = (visible ~= false);
@@ -4796,6 +4756,7 @@ do
         function ESPPreviewObj:SetSkeleton(visible, color)
             SkeletonEnabled = (visible ~= false);
             if color then SkeletonColor = color end;
+            SkeletonContainer.Visible = SkeletonEnabled and (CurrentMode ~= 'Image');
             UpdateSkeleton();
         end;
 
@@ -4891,8 +4852,114 @@ do
             SetupModel(newModel);
         end;
 
+        function ESPPreviewObj:SyncWithToggles()
+            local master = true;
+            if Toggles.ESPEnabled ~= nil then master = Toggles.ESPEnabled.Value
+            elseif Toggles.esp_on ~= nil then master = Toggles.esp_on.Value
+            elseif Toggles.MasterESP ~= nil then master = Toggles.MasterESP.Value
+            end;
+
+            if not master then
+                self:SetBox(false);
+                self:SetSkeleton(false);
+                self:SetName(false);
+                self:SetHealth(false);
+                self:SetAmmo(false);
+                self:SetWeapon(false);
+                self:SetDistance(false);
+                self:SetFlags(false);
+                self:SetChams(false);
+                return;
+            end;
+
+            local boxTog = Toggles.BoxESP or Toggles.esp_box or Toggles.Box;
+            local boxColOpt = Options.BoxColor or Options.esp_box_col or Options.Box;
+            local boxStyleOpt = Options.BoxStyle or Options.esp_box_style;
+            local boxVis = (boxTog == nil) or boxTog.Value;
+            local boxCol = boxColOpt and boxColOpt.Value or Color3.fromRGB(255, 255, 255);
+            local boxStyle = boxStyleOpt and boxStyleOpt.Value or 'Corner';
+            self:SetBox(boxVis, boxCol, boxStyle);
+
+            local fillTog = Toggles.BoxFill or Toggles.esp_box_fill;
+            local fillColOpt = Options.BoxFillColor or Options.esp_box_fill_col;
+            local fillTransOpt = Options.BoxFillTransparency or Options.esp_box_fill_trans;
+            local fillVis = fillTog and fillTog.Value or false;
+            local fillCol = fillColOpt and fillColOpt.Value or Color3.fromRGB(255, 255, 255);
+            local fillTrans = fillTransOpt and fillTransOpt.Value or 0.85;
+            self:SetBoxFill(fillVis, fillCol, fillTrans);
+
+            local skelTog = Toggles.SkeletonESP or Toggles.esp_skel or Toggles.Skeleton;
+            local skelColOpt = Options.SkeletonColor or Options.esp_skel_col;
+            local skelVis = skelTog and skelTog.Value or false;
+            local skelCol = skelColOpt and skelColOpt.Value or Color3.fromRGB(255, 255, 255);
+            self:SetSkeleton(skelVis, skelCol);
+
+            local hpTog = Toggles.HealthBar or Toggles.esp_hp or Toggles.Health;
+            local hpNumTog = Toggles.HealthNumber or Toggles.esp_hp_num;
+            local hpVis = (hpTog == nil) or hpTog.Value;
+            local hpNum = (hpNumTog == nil) or hpNumTog.Value;
+            self:SetHealth(hpVis, 100, hpNum);
+
+            local ammoTog = Toggles.AmmoBar or Toggles.esp_ammo;
+            local ammoColOpt = Options.AmmoColor or Options.esp_ammo_col;
+            local ammoVis = ammoTog and ammoTog.Value or false;
+            local ammoCol = ammoColOpt and ammoColOpt.Value or Color3.fromRGB(80, 140, 255);
+            self:SetAmmo(ammoVis, 1.0, ammoCol, '30');
+
+            local nameTog = Toggles.NameESP or Toggles.esp_name or Toggles.Name;
+            local nameColOpt = Options.NameColor or Options.esp_name_col;
+            local nameVis = (nameTog == nil) or nameTog.Value;
+            local nameCol = nameColOpt and nameColOpt.Value or Color3.fromRGB(255, 255, 255);
+            local displayName = LocalPlayer and (LocalPlayer.DisplayName or LocalPlayer.Name) or 'LocalPlayer';
+            self:SetName(nameVis, nameCol, displayName);
+
+            local wepTog = Toggles.WeaponESP or Toggles.esp_wep or Toggles.Weapon;
+            local wepColOpt = Options.WeaponColor or Options.esp_wep_col;
+            local wepVis = (wepTog == nil) or wepTog.Value;
+            local wepCol = wepColOpt and wepColOpt.Value or Color3.fromRGB(220, 220, 230);
+            local curWeapon = (Options.SkinWeapon and Options.SkinWeapon.Value) or 'Assault Rifle';
+            self:SetWeapon(wepVis, wepCol, curWeapon);
+
+            local distTog = Toggles.DistanceESP or Toggles.esp_dist_tag or Toggles.Distance;
+            local distColOpt = Options.DistanceColor or Options.esp_dist_col;
+            local distVis = distTog and distTog.Value or false;
+            local distCol = distColOpt and distColOpt.Value or Color3.fromRGB(175, 175, 190);
+            self:SetDistance(distVis, distCol, '18m');
+
+            local flagsTog = Toggles.FlagsESP or Toggles.esp_flags;
+            local flagsVis = flagsTog and flagsTog.Value or false;
+            self:SetFlags(flagsVis, { Armor = true, Scoped = true, VIP = true, Flashed = false, Reload = false });
+
+            local chamsTog = Toggles.ChamsEnabled or Toggles.chams_on or Toggles.Chams;
+            local chamsColOpt = Options.ChamsColor or Options.chams_col;
+            local chamsTransOpt = Options.ChamsTransparency or Options.chams_trans;
+            local chamsMatOpt = Options.ChamsMaterial or Options.chams_mat;
+            local chamsVis = chamsTog and chamsTog.Value or false;
+            local chamsCol = chamsColOpt and chamsColOpt.Value or Color3.fromRGB(255, 255, 255);
+            local chamsTrans = chamsTransOpt and chamsTransOpt.Value or 0.35;
+            local matName = chamsMatOpt and chamsMatOpt.Value or 'Neon';
+            local chamsMat = Enum.Material[matName] or Enum.Material.Neon;
+            self:SetChams(chamsVis, chamsCol, chamsTrans, chamsMat);
+        end;
+
+        table.insert(Library.ESPPreviews, ESPPreviewObj);
+
+        return ESPPreviewObj;
+    end;
+
+    function Funcs:AddESPPreview(Idx, Info)
+        if type(Idx) == 'table' and Info == nil then
+            Info = Idx;
+            Idx = Info.Idx or ('ESPPreview_' .. tostring(math.random(10000, 99999)));
+        end;
+        Info = Info or {};
+        local Groupbox = self;
+        local Container = Groupbox.Container;
+
+        local ESPPreviewObj = Library:CreateESPPreviewWidget(Container, Idx, Info);
+
         Groupbox:AddBlank(Info.BlankSize or 5);
-        Groupbox:Resize();
+        if Groupbox.Resize then Groupbox:Resize(); end;
 
         Options[Idx] = ESPPreviewObj;
         return ESPPreviewObj;
@@ -5057,6 +5124,116 @@ do
     Library.KeybindFrame = KeybindOuter;
     Library.KeybindContainer = KeybindContainer;
     Library:MakeDraggable(KeybindOuter);
+
+    -- Standalone Floating ESP Preview Window (affichable hors du menu via le tab Settings)
+    local FloatingESPOuter = Library:Create('Frame', {
+        AnchorPoint = Vector2.new(0, 0);
+        BorderColor3 = Color3.new(0, 0, 0);
+        Position = UDim2.new(0, 20, 0, 200);
+        Size = UDim2.new(0, 230, 0, 310);
+        Visible = false;
+        ZIndex = 110;
+        Parent = ScreenGui;
+    });
+
+    local FloatingESPInner = Library:Create('Frame', {
+        BackgroundColor3 = Library.MainColor;
+        BorderColor3 = Library.OutlineColor;
+        BorderMode = Enum.BorderMode.Inset;
+        Size = UDim2.new(1, 0, 1, 0);
+        ZIndex = 111;
+        Parent = FloatingESPOuter;
+    });
+
+    Library:AddToRegistry(FloatingESPInner, {
+        BackgroundColor3 = 'MainColor';
+        BorderColor3 = 'OutlineColor';
+    }, true);
+
+    local FloatingAccent = Library:Create('Frame', {
+        BackgroundColor3 = Library.AccentColor;
+        BorderSizePixel = 0;
+        Size = UDim2.new(1, 0, 0, 2);
+        ZIndex = 112;
+        Parent = FloatingESPInner;
+    });
+
+    Library:AddToRegistry(FloatingAccent, {
+        BackgroundColor3 = 'AccentColor';
+    }, true);
+
+    local FloatingHeader = Library:Create('Frame', {
+        BackgroundTransparency = 1;
+        Size = UDim2.new(1, 0, 0, 22);
+        Position = UDim2.new(0, 0, 0, 2);
+        ZIndex = 113;
+        Parent = FloatingESPInner;
+    });
+
+    local FloatingTitle = Library:CreateLabel({
+        Size = UDim2.new(1, -30, 1, 0);
+        Position = UDim2.new(0, 8, 0, 0);
+        TextXAlignment = Enum.TextXAlignment.Left;
+        Text = 'ESP Preview';
+        TextSize = 11;
+        TextColor3 = Library.FontColor;
+        ZIndex = 114;
+        Parent = FloatingHeader;
+    });
+
+    Library:AddToRegistry(FloatingTitle, {
+        TextColor3 = 'FontColor';
+    }, true);
+
+    local FloatingClose = Library:Create('TextButton', {
+        AnchorPoint = Vector2.new(1, 0.5);
+        Position = UDim2.new(1, -6, 0.5, 0);
+        Size = UDim2.new(0, 16, 0, 16);
+        BackgroundColor3 = Color3.fromRGB(24, 24, 28);
+        BorderColor3 = Color3.fromRGB(45, 45, 52);
+        Text = '✕';
+        TextColor3 = Color3.fromRGB(180, 180, 190);
+        TextSize = 10;
+        ZIndex = 115;
+        Parent = FloatingHeader;
+    });
+
+    FloatingClose.MouseButton1Click:Connect(function()
+        if Toggles.ShowESPPreview then
+            Toggles.ShowESPPreview:SetValue(false);
+        else
+            Library:SetFloatingESPPreviewVisibility(false);
+        end;
+    end);
+
+    local FloatingBody = Library:Create('Frame', {
+        BackgroundTransparency = 1;
+        Position = UDim2.new(0, 5, 0, 26);
+        Size = UDim2.new(1, -10, 1, -31);
+        ZIndex = 113;
+        Parent = FloatingESPInner;
+    });
+
+    Library.FloatingESPFrame = FloatingESPOuter;
+    Library:MakeDraggable(FloatingESPOuter);
+
+    task.defer(function()
+        if Library.CreateESPPreviewWidget then
+            Library.FloatingESPWidget = Library:CreateESPPreviewWidget(FloatingBody, 'FloatingESPPreview', {
+                Height = 270,
+                Standalone = true,
+            });
+        end;
+    end);
+end;
+
+function Library:SetFloatingESPPreviewVisibility(Bool)
+    if Library.FloatingESPFrame then
+        Library.FloatingESPFrame.Visible = Bool;
+        if Bool and Library.FloatingESPWidget and Library.FloatingESPWidget.SyncWithToggles then
+            Library.FloatingESPWidget:SyncWithToggles();
+        end;
+    end;
 end;
 
 function Library:SetWatermarkVisibility(Bool)
@@ -5120,8 +5297,6 @@ function Library:GetCustomAsset(url, filename)
     return rawUrl
 end;
 
-local UpdateWatermarkDisplay;
-
 function Library:SetWatermarkIcon(url)
     if not Library.WatermarkIcon then return end
     if url == false then
@@ -5144,6 +5319,32 @@ function Library:SetWatermarkIcon(url)
     end)
 end;
 
+function Library:SetFont(url, filename)
+    url = url or Library.CustomFontUrl
+    filename = filename or Library.CustomFontName or 'Minecraftia-Regular.ttf'
+
+    task.spawn(function()
+        local asset = Library:GetCustomAsset(url, filename)
+        if asset and asset ~= '' then
+            local okFont, fontObj = pcall(Font.new, asset, Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+            if okFont and fontObj then
+                Library.FontFace = fontObj
+                if ScreenGui then
+                    for _, inst in ipairs(ScreenGui:GetDescendants()) do
+                        if inst:IsA('TextLabel') or inst:IsA('TextBox') or inst:IsA('TextButton') then
+                            pcall(function() inst.FontFace = fontObj end)
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end;
+
+task.spawn(function()
+    Library:SetFont();
+end);
+
 Library.WatermarkTitle = 'gamesense.pub';
 local WatermarkFps = 60;
 local WatermarkPing = 0;
@@ -5153,7 +5354,7 @@ local function StripTags(str)
     return str:gsub('<[^>]->', '');
 end;
 
-UpdateWatermarkDisplay = function()
+local function UpdateWatermarkDisplay()
     if not Library.Watermark or not Library.Watermark.Visible then return end;
 
     local base = Library.WatermarkTitle or 'gamesense.pub';
@@ -5333,11 +5534,11 @@ function Library:Notify(Text, Time)
     pcall(NotifyOuter.TweenSize, NotifyOuter, UDim2.new(0, XSize + 8 + 4, 0, YSize), 'Out', 'Quad', 0.4, true);
 
     task.spawn(function()
-        wait(Time or 5);
+        task.wait(Time or 5);
 
         pcall(NotifyOuter.TweenSize, NotifyOuter, UDim2.new(0, 0, 0, YSize), 'Out', 'Quad', 0.4, true);
 
-        wait(0.4);
+        task.wait(0.4);
 
         NotifyOuter:Destroy();
     end);
@@ -5725,12 +5926,6 @@ local SaveManager = {} do
 			if not (option and option.Type and self.Parser[option.Type]) then continue end
 			table.insert(data.objects, self.Parser[option.Type].Save(idx, option))
 		end
-		if self.CustomSave then
-			local okCustom, customData = pcall(self.CustomSave)
-			if okCustom and customData then
-				data.custom = customData
-			end
-		end
 		local success, encoded = pcall(httpService.JSONEncode, httpService, data)
 		if not success then return false, 'failed to encode data' end
 		local writeOk, writeErr = pcall(function() writefile(fullPath, encoded) end)
@@ -5754,11 +5949,6 @@ local SaveManager = {} do
 					pcall(function() self.Parser[option.type].Load(option.idx, option) end)
 				end)
 			end
-		end
-		if decoded.custom and self.CustomLoad then
-			task.spawn(function()
-				pcall(self.CustomLoad, decoded.custom)
-			end)
 		end
 		return true
 	end
@@ -6038,7 +6228,7 @@ function Library:CreateWindow(...)
         BorderColor3 = Color3.new(0, 0, 0);
         Position = Config.Position,
         Size = GetFittedSize(),
-        Visible = (Config.AutoShow == true),
+        Visible = false,
         ZIndex = 1;
         Parent = ScreenGui;
     });
@@ -6493,11 +6683,9 @@ function Library:CreateWindow(...)
         elseif type(ResolvedIcon) == 'string' and ResolvedIcon:match('^%d+$') then
             ResolvedIcon = 'rbxassetid://' .. ResolvedIcon;
         elseif not ResolvedIcon then
-            ResolvedIcon = Library.Icons[Name] or Library.Icons.Default;
-        elseif Library.Icons[ResolvedIcon] then
-            ResolvedIcon = Library.Icons[ResolvedIcon];
-        elseif type(ResolvedIcon) == 'string' and not ResolvedIcon:find('rbxasset') then
-            ResolvedIcon = Library.Icons[Name] or Library.Icons.Default or 'rbxassetid://7734053495';
+            ResolvedIcon = Library:ResolveIcon(Name);
+        elseif Library:ResolveIcon(ResolvedIcon) then
+            ResolvedIcon = Library:ResolveIcon(ResolvedIcon);
         end;
 
         local lowerName = Name:lower();
@@ -6578,11 +6766,11 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0, 8, 0, 8);
             Size = UDim2.new(0.5, -12, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            ScrollBarThickness = IsMobile and 8 or 0;
-            ScrollBarImageTransparency = IsMobile and 0.25 or 1;
+            ScrollBarThickness = 6;
             ScrollBarImageColor3 = Library.AccentColor;
             TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
             BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            MidImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
             ScrollingDirection = Enum.ScrollingDirection.Y;
             Selectable = false;
             Active = true;
@@ -6596,11 +6784,11 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0.5, 4, 0, 8);
             Size = UDim2.new(0.5, -12, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            ScrollBarThickness = IsMobile and 8 or 0;
-            ScrollBarImageTransparency = IsMobile and 0.25 or 1;
+            ScrollBarThickness = 6;
             ScrollBarImageColor3 = Library.AccentColor;
             TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
             BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            MidImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
             ScrollingDirection = Enum.ScrollingDirection.Y;
             Selectable = false;
             Active = true;
@@ -6614,11 +6802,11 @@ function Library:CreateWindow(...)
             Position = UDim2.new(0, 8, 0, 8);
             Size = UDim2.new(1, -16, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            ScrollBarThickness = IsMobile and 8 or 0;
-            ScrollBarImageTransparency = IsMobile and 0.25 or 1;
+            ScrollBarThickness = 6;
             ScrollBarImageColor3 = Library.AccentColor;
             TopImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
             BottomImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
+            MidImage = 'rbxasset://textures/ui/Scroll/scroll-middle.png';
             ScrollingDirection = Enum.ScrollingDirection.Y;
             Selectable = false;
             Active = true;
@@ -6627,9 +6815,15 @@ function Library:CreateWindow(...)
             Parent = TabFrame;
         });
 
-        Library:AddToRegistry(LeftSide, { ScrollBarImageColor3 = 'AccentColor' });
-        Library:AddToRegistry(RightSide, { ScrollBarImageColor3 = 'AccentColor' });
-        Library:AddToRegistry(FullSide, { ScrollBarImageColor3 = 'AccentColor' });
+        Library:AddToRegistry(LeftSide, {
+            ScrollBarImageColor3 = 'AccentColor';
+        });
+        Library:AddToRegistry(RightSide, {
+            ScrollBarImageColor3 = 'AccentColor';
+        });
+        Library:AddToRegistry(FullSide, {
+            ScrollBarImageColor3 = 'AccentColor';
+        });
 
         Tab.LeftSide = LeftSide;
         Tab.RightSide = RightSide;
@@ -7202,12 +7396,12 @@ function Library:CreateWindow(...)
         Size = UDim2.new(0, 0, 0, 0);
         Visible = true;
         Text = '';
-        Modal = (Config.AutoShow == true);
+        Modal = false;
         Parent = ScreenGui;
     });
 
     local TransparencyCache = {};
-    local Toggled = (Config.AutoShow == true);
+    local Toggled = false;
     local Fading = false;
 
     function Library:Toggle()
@@ -7215,24 +7409,15 @@ function Library:CreateWindow(...)
             return;
         end;
 
-        local FadeTime = Config.MenuFadeTime or 0;
+        local FadeTime = Config.MenuFadeTime;
         Fading = true;
         Toggled = (not Toggled);
         ModalElement.Modal = Toggled;
-
-        if (not FadeTime) or FadeTime <= 0 then
-            Outer.Visible = Toggled;
-            Fading = false;
-            if Library.UpdateOpenButtonState then Library.UpdateOpenButtonState(Toggled) end;
-            return;
-        end;
 
         if Toggled then
             -- A bit scuffed, but if we're going from not toggled -> toggled we want to show the frame immediately so that the fade is visible.
             Outer.Visible = true;
         end;
-
-        if Library.UpdateOpenButtonState then Library.UpdateOpenButtonState(Toggled) end;
 
         for _, Desc in next, Outer:GetDescendants() do
             local Properties = {};
@@ -7264,16 +7449,13 @@ function Library:CreateWindow(...)
                     continue;
                 end;
 
-                pcall(function()
-                    TweenService:Create(Desc, TweenInfo.new(FadeTime, Enum.EasingStyle.Linear), { [Prop] = Toggled and Cache[Prop] or 1 }):Play();
-                end);
+                TweenService:Create(Desc, TweenInfo.new(FadeTime, Enum.EasingStyle.Linear), { [Prop] = Toggled and Cache[Prop] or 1 }):Play();
             end;
         end;
 
         task.wait(FadeTime);
 
         Outer.Visible = Toggled;
-        if Library.UpdateOpenButtonState then Library.UpdateOpenButtonState(Toggled) end;
 
         Fading = false;
     end
@@ -7289,165 +7471,98 @@ function Library:CreateWindow(...)
     end))
 
     --============================================================
-    --  Bouton flottant d'ouverture (mobile / tactile avec logo synchronisé)
+    --  Bouton flottant d'ouverture (mobile / tactile : pas de clavier)
     --============================================================
     local OpenButton = Library:Create('TextButton', {
         BackgroundColor3 = Library.AccentColor;
-        BorderSizePixel = 0;
+        BorderColor3 = Library.AccentColorDark;
+        BorderMode = Enum.BorderMode.Inset;
         AnchorPoint = Vector2.new(1, 0.5);
-        Position = UDim2.new(1, -16, 0.5, 0);
-        Size = UDim2.new(0, 48, 0, 48);
-        Text = '';
+        Position = UDim2.new(1, -20, 0.5, 0);
+        Size = UDim2.new(0, 46, 0, 46);
+        Text = 'GS';
+        TextColor3 = Color3.new(1, 1, 1);
+        TextSize = 16;
+        Font = Library.Font;
         AutoButtonColor = false;
-        ZIndex = 200;
-        Active = true;
-        Visible = IsMobile;
+        ZIndex = 50;
+        Visible = IsTouch;
         Parent = ScreenGui;
     });
 
-    Library:Create('UICorner', {
-        CornerRadius = UDim.new(0, 12);
-        Parent = OpenButton;
+    Library:AddToRegistry(OpenButton, {
+        BackgroundColor3 = 'AccentColor';
+        BorderColor3 = 'AccentColorDark';
     });
 
-    local OpenButtonStroke = Library:Create('UIStroke', {
-        Color = Color3.fromRGB(255, 255, 255);
-        Thickness = 1.5;
-        ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
-        Parent = OpenButton;
-    });
-
-    local OpenButtonLogo = Library:Create('ImageLabel', {
-        BackgroundTransparency = 1;
-        BorderSizePixel = 0;
-        Size = UDim2.new(1, -8, 1, -8);
-        Position = UDim2.new(0.5, 0, 0.5, 0);
-        AnchorPoint = Vector2.new(0.5, 0.5);
-        Image = 'rbxassetid://7734053495';
-        ScaleType = Enum.ScaleType.Fit;
-        ZIndex = 202;
-        Active = false;
-        Parent = OpenButton;
-    });
-
-    Library:Create('UICorner', {
-        CornerRadius = UDim.new(0, 8);
-        Parent = OpenButtonLogo;
-    });
-
-    task.spawn(function()
-        local logoUrl = Library.DefaultLogoUrl or 'https://github.com/xvbxvvv/logo/blob/main/0fb782bd-42a8-46bd-8a52-7df5bee0812a.jpg?raw=true';
-        local asset = Library:GetCustomAsset(logoUrl, 'gamesense_mobile_logo.jpg');
-        if asset and asset ~= '' and OpenButtonLogo then
-            OpenButtonLogo.Image = asset;
+    -- déplaçable + tap pour ouvrir/fermer (tactile et souris)
+    Library:GiveSignal(OpenButton.InputBegan:Connect(function(Input)
+        if Input.UserInputType ~= Enum.UserInputType.MouseButton1
+            and Input.UserInputType ~= Enum.UserInputType.Touch then
+            return;
         end;
-    end);
 
-    local function SyncOpenButton(isOpen)
-        if isOpen == nil then isOpen = Outer.Visible end;
-        if isOpen then
-            OpenButton.BackgroundColor3 = Library.AccentColor;
-            OpenButton.BackgroundTransparency = 0.1;
-            OpenButtonStroke.Color = Color3.fromRGB(255, 255, 255);
-            OpenButtonStroke.Thickness = 2;
-        else
-            OpenButton.BackgroundColor3 = Color3.fromRGB(16, 16, 20);
-            OpenButton.BackgroundTransparency = 0.25;
-            OpenButtonStroke.Color = Library.AccentColor;
-            OpenButtonStroke.Thickness = 1.5;
+        local startPos = Vector2.new(Input.Position.X, Input.Position.Y);
+        local startAbs = OpenButton.AbsolutePosition;
+        local moved = false;
+        local dragging = true;
+        local activeInput = Input;
+
+        local moveConn
+        local endConn
+
+        local function Disconnect()
+            dragging = false;
+            if moveConn then moveConn:Disconnect(); moveConn = nil; end;
+            if endConn then endConn:Disconnect(); endConn = nil; end;
         end;
-    end;
 
-    Library.UpdateOpenButtonState = SyncOpenButton;
-    Library.OpenButton = OpenButton;
-    SyncOpenButton(Outer.Visible);
+        moveConn = InputService.InputChanged:Connect(function(moveInput)
+            if not dragging then return end;
 
-    Library:GiveSignal(Outer:GetPropertyChangedSignal('Visible'):Connect(function()
-        Toggled = Outer.Visible;
-        SyncOpenButton(Outer.Visible);
-    end));
+            local isMatch = (moveInput == activeInput)
+                or (activeInput.UserInputType == Enum.UserInputType.Touch and moveInput.UserInputType == Enum.UserInputType.Touch)
+                or (activeInput.UserInputType == Enum.UserInputType.MouseButton1 and moveInput.UserInputType == Enum.UserInputType.MouseMovement);
 
-    -- Déplaçable n'importe où sur l'écran + tap/click pour synchroniser On/Off
-    local isDragging = false;
-    local hasDragged = false;
-    local dragStartPos = Vector2.zero;
-    local buttonStartAbs = Vector2.zero;
-    local dragInput = nil;
+            if isMatch and moveInput.Position then
+                local dx = moveInput.Position.X - startPos.X;
+                local dy = moveInput.Position.Y - startPos.Y;
 
-    local function GetInputScreenPos(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseMovement then
-            return InputService:GetMouseLocation();
-        else
-            return Vector2.new(input.Position.X, input.Position.Y);
-        end;
-    end;
+                if (math.abs(dx) > 6) or (math.abs(dy) > 6) then
+                    moved = true;
+                end;
 
-    Library:GiveSignal(OpenButton.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            isDragging = true;
-            hasDragged = false;
-            dragInput = input;
-            dragStartPos = GetInputScreenPos(input);
-            buttonStartAbs = OpenButton.AbsolutePosition;
-        end;
-    end));
-
-    Library:GiveSignal(InputService.InputChanged:Connect(function(input)
-        if not isDragging then return; end;
-        local isMatch = (input == dragInput)
-            or (dragInput and dragInput.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement)
-            or (dragInput and dragInput.UserInputType == Enum.UserInputType.Touch and input.UserInputType == Enum.UserInputType.Touch);
-
-        if isMatch then
-            local currentPos = GetInputScreenPos(input);
-            local delta = currentPos - dragStartPos;
-
-            if (math.abs(delta.X) > 8) or (math.abs(delta.Y) > 8) then
-                hasDragged = true;
-            end;
-
-            if hasDragged then
                 local VP = GetViewport();
                 local W, H = OpenButton.AbsoluteSize.X, OpenButton.AbsoluteSize.Y;
+
                 OpenButton.AnchorPoint = Vector2.zero;
                 OpenButton.Position = UDim2.fromOffset(
-                    math.clamp(buttonStartAbs.X + delta.X, -20, math.max(-20, VP.X - W + 20)),
-                    math.clamp(buttonStartAbs.Y + delta.Y, 0, math.max(0, VP.Y - H))
+                    math.clamp(startAbs.X + dx, 6, math.max(6, VP.X - W - 6)),
+                    math.clamp(startAbs.Y + dy, 6, math.max(6, VP.Y - H - 6))
                 );
             end;
-        end;
+        end);
+
+        endConn = InputService.InputEnded:Connect(function(endInput)
+            if endInput == activeInput
+                or (activeInput.UserInputType == Enum.UserInputType.MouseButton1 and endInput.UserInputType == Enum.UserInputType.MouseButton1)
+                or (activeInput.UserInputType == Enum.UserInputType.Touch and endInput.UserInputType == Enum.UserInputType.Touch) then
+                Disconnect();
+                if not moved then
+                    Library:Toggle();
+                end;
+            end;
+        end);
+
+        activeInput.Changed:Connect(function()
+            if activeInput.UserInputState == Enum.UserInputState.End
+                or activeInput.UserInputState == Enum.UserInputState.Cancel then
+                Disconnect();
+            end;
+        end);
     end));
 
-    Library:GiveSignal(OpenButton.Activated:Connect(function()
-        if not hasDragged then
-            task.spawn(function()
-                Library:Toggle();
-                SyncOpenButton(Outer.Visible);
-            end);
-        end;
-    end));
-
-    local function OnInputEnd(input)
-        if not isDragging then return; end;
-        local isMatch = (input == dragInput)
-            or (dragInput and dragInput.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseButton1)
-            or (dragInput and dragInput.UserInputType == Enum.UserInputType.Touch and input.UserInputType == Enum.UserInputType.Touch);
-
-        if isMatch then
-            isDragging = false;
-            dragInput = nil;
-            task.delay(0.08, function()
-                hasDragged = false;
-            end);
-        end;
-    end;
-
-    Library:GiveSignal(OpenButton.InputEnded:Connect(OnInputEnd));
-    Library:GiveSignal(InputService.InputEnded:Connect(OnInputEnd));
-
-    if Config.AutoShow and not Outer.Visible then
-        Outer.Visible = true;
-    end;
+    if Config.AutoShow then task.spawn(Library.Toggle) end
 
     -- Support universel du défilement à la molette de la souris (Mouse Wheel Scrolling)
     local function SmoothScroll(frame, wheelDelta)
@@ -7583,7 +7698,7 @@ function Library:CreateWindow(...)
             SaveManager:IgnoreThemeSettings();
             SaveManager:SetIgnoreIndexes({
                 'SaveManager_ConfigList', 'SaveManager_ConfigName', 'SaveManager_AutoLoadToggle',
-                'MenuKeybind', 'KeybindMenuOpen', 'ShowWatermark', 'ShowCustomCursor', 'NotificationSide'
+                'MenuKeybind', 'KeybindMenuOpen', 'ShowWatermark', 'ShowCustomCursor', 'NotificationSide', 'ShowESPPreview'
             });
             SaveManager:SetFolder(configFolder);
             SaveManager:BuildConfigSection(SettingsTab);
@@ -7603,6 +7718,14 @@ function Library:CreateWindow(...)
                 end,
             });
         end;
+
+        MenuBox:AddToggle('ShowESPPreview', {
+            Text = 'Show ESP Preview',
+            Default = false,
+            Callback = function(v)
+                Library:SetFloatingESPPreviewVisibility(v);
+            end,
+        });
 
         MenuBox:AddToggle('ShowWatermark', {
             Text = 'Show Watermark',
@@ -7681,7 +7804,6 @@ function Library:CreateWindow(...)
     end;
 
     Window.Holder = Outer;
-    Library.Window = Window;
 
     return Window;
 end;
@@ -7696,8 +7818,8 @@ local function OnPlayerChange()
     end;
 end;
 
-table.insert(Library.Signals, Players.PlayerAdded:Connect(OnPlayerChange));
-table.insert(Library.Signals, Players.PlayerRemoving:Connect(OnPlayerChange));
+Players.PlayerAdded:Connect(OnPlayerChange);
+Players.PlayerRemoving:Connect(OnPlayerChange);
 
 getgenv().Library = Library
 
