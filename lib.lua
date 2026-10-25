@@ -6321,18 +6321,19 @@ function Library:CreateWindow(...)
         BackgroundTransparency = 1;
         BorderSizePixel = 0;
         Position = UDim2.new(0, 0, 0, 2);
-        Size = UDim2.new(1, 0, 0, 22);
+        Size = UDim2.new(1, 0, 0, 24);
         ZIndex = 5;
         Active = true;
         Parent = MainContent;
     });
 
+    -- Logo sits immediately left of the title.
     local WindowLogo = Library:Create('ImageLabel', {
         BackgroundTransparency = 1;
         BorderSizePixel = 0;
         Position = UDim2.new(0, 8, 0.5, 0);
         AnchorPoint = Vector2.new(0, 0.5);
-        Size = UDim2.fromOffset(14, 14);
+        Size = UDim2.fromOffset(16, 16);
         Image = '';
         ScaleType = Enum.ScaleType.Fit;
         ZIndex = 6;
@@ -6340,12 +6341,15 @@ function Library:CreateWindow(...)
         Parent = TopTitleBar;
     });
 
+    -- Title starts flush left; SetLogo shifts it right once a logo is present.
     local WindowTitle = Library:CreateLabel({
         Position = UDim2.new(0, 8, 0, 0);
-        Size = UDim2.new(1, -16, 1, 0);
-        TextSize = 13;
+        Size = UDim2.new(1, -178, 1, 0);
+        TextSize = 15;
         RichText = true;
         TextXAlignment = Enum.TextXAlignment.Left;
+        TextYAlignment = Enum.TextYAlignment.Center;
+        TextTruncate = Enum.TextTruncate.AtEnd;
         ZIndex = 6;
         Parent = TopTitleBar;
     });
@@ -6379,7 +6383,7 @@ function Library:CreateWindow(...)
             WindowLogo.Visible = false;
             WindowLogo.Image = '';
             WindowTitle.Position = UDim2.new(0, 8, 0, 0);
-            WindowTitle.Size = UDim2.new(1, -16, 1, 0);
+            WindowTitle.Size = UDim2.new(1, -178, 1, 0);
             return;
         end;
 
@@ -6389,8 +6393,8 @@ function Library:CreateWindow(...)
             if asset and asset ~= '' and WindowLogo then
                 WindowLogo.Image = asset;
                 WindowLogo.Visible = true;
-                WindowTitle.Position = UDim2.new(0, 26, 0, 0);
-                WindowTitle.Size = UDim2.new(1, -34, 1, 0);
+                WindowTitle.Position = UDim2.new(0, 30, 0, 0);
+                WindowTitle.Size = UDim2.new(1, -200, 1, 0);
             end;
         end);
     end;
@@ -6438,7 +6442,7 @@ function Library:CreateWindow(...)
 
     local BottomTabArea = Library:Create('Frame', {
         BackgroundTransparency = 1;
-        Position = UDim2.new(0, 0, 1, -112);
+        Position = UDim2.new(0, 0, 1, -56);
         Size = UDim2.new(1, 0, 0, 52);
         ZIndex = 4;
         Parent = SidebarOuter;
@@ -6457,7 +6461,7 @@ function Library:CreateWindow(...)
         BackgroundTransparency = 1;
         BorderSizePixel = 0;
         Position = UDim2.new(0, 0, 0, 10);
-        Size = UDim2.new(1, 0, 1, -125);
+        Size = UDim2.new(1, 0, 1, -16);
         CanvasSize = UDim2.new(0, 0, 0, 0);
         AutomaticCanvasSize = Enum.AutomaticSize.Y;
         ScrollBarThickness = 0;
@@ -6478,7 +6482,8 @@ function Library:CreateWindow(...)
     local TopTabLayout = TopTabArea:FindFirstChildOfClass('UIListLayout');
 
     local function UpdateSidebarLayout()
-        local badgeH = 58;
+        -- Profile chip lives in the header now, so the sidebar reserves nothing for it.
+        local badgeH = 0;
         local countBottom = 0;
         for _, child in next, BottomTabArea:GetChildren() do
             if child:IsA('GuiButton') or child:IsA('Frame') then
@@ -6508,15 +6513,15 @@ function Library:CreateWindow(...)
     SidebarOuter:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateSidebarLayout);
 
 
-    -- Profile Badge at bottom of sidebar
-    -- Badge tall enough for avatar + two text lines
+    -- Profile chip lives at the right edge of the header
     local ProfileBadge = Library:Create('Frame', {
         BackgroundColor3 = Color3.fromRGB(18, 18, 20);
         BorderSizePixel = 0;
-        Position = UDim2.new(0, 4, 1, -54);
-        Size = UDim2.new(1, -8, 0, 48);
-        ZIndex = 5;
-        Parent = SidebarOuter;
+        AnchorPoint = Vector2.new(1, 0.5);
+        Position = UDim2.new(1, -8, 0.5, 0);
+        Size = UDim2.fromOffset(150, 20);
+        ZIndex = 7;
+        Parent = TopTitleBar;
     });
 
     Library:Create('UICorner', {
@@ -6536,11 +6541,11 @@ function Library:CreateWindow(...)
         BackgroundColor3 = Color3.fromRGB(30, 30, 35);
         BorderSizePixel = 0;
         AnchorPoint = Vector2.new(0, 0.5);
-        Position = UDim2.new(0, 5, 0.5, 0);
-        Size = UDim2.new(0, 28, 0, 28);
+        Position = UDim2.new(0, 3, 0.5, 0);
+        Size = UDim2.new(0, 14, 0, 14);
         Image = '';
         ScaleType = Enum.ScaleType.Fit;
-        ZIndex = 6;
+        ZIndex = 8;
         Parent = ProfileBadge;
     });
 
@@ -6555,8 +6560,8 @@ function Library:CreateWindow(...)
         BorderSizePixel = 0;
         AnchorPoint = Vector2.new(1, 1);
         Position = UDim2.new(1, 1, 1, 1);
-        Size = UDim2.new(0, 8, 0, 8);
-        ZIndex = 7;
+        Size = UDim2.new(0, 6, 0, 6);
+        ZIndex = 9;
         Parent = ProfileAvatar;
     });
 
@@ -6565,19 +6570,26 @@ function Library:CreateWindow(...)
         Parent = OnlineDot;
     });
 
+    Library:Create('UIStroke', {
+        Color = Color3.fromRGB(18, 18, 20);
+        Thickness = 1;
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+        Parent = OnlineDot;
+    });
+
     -- DisplayName label
     local ProfileDisplayName = Library:Create('TextLabel', {
         BackgroundTransparency = 1;
         AnchorPoint = Vector2.new(0, 0);
-        Position = UDim2.new(0, 38, 0, 6);
-        Size = UDim2.new(1, -44, 0, 14);
+        Position = UDim2.new(0, 20, 0, 0);
+        Size = UDim2.new(1, -24, 0, 11);
         Text = (LocalPlayer and LocalPlayer.DisplayName or 'Player');
         TextColor3 = Library.FontColor;
         Font = Library.Font;
-        TextSize = 11;
+        TextSize = 10;
         TextXAlignment = Enum.TextXAlignment.Left;
         TextTruncate = Enum.TextTruncate.AtEnd;
-        ZIndex = 6;
+        ZIndex = 8;
         Parent = ProfileBadge;
     });
 
@@ -6589,15 +6601,15 @@ function Library:CreateWindow(...)
     local ProfileUsername = Library:Create('TextLabel', {
         BackgroundTransparency = 1;
         AnchorPoint = Vector2.new(0, 0);
-        Position = UDim2.new(0, 38, 0, 22);
-        Size = UDim2.new(1, -44, 0, 13);
+        Position = UDim2.new(0, 20, 0, 11);
+        Size = UDim2.new(1, -24, 0, 9);
         Text = '@' .. (LocalPlayer and LocalPlayer.Name or 'Player');
         TextColor3 = Color3.fromRGB(120, 120, 120);
         Font = Library.Font;
-        TextSize = 10;
+        TextSize = 8;
         TextXAlignment = Enum.TextXAlignment.Left;
         TextTruncate = Enum.TextTruncate.AtEnd;
-        ZIndex = 6;
+        ZIndex = 8;
         Parent = ProfileBadge;
     });
 
@@ -7804,6 +7816,7 @@ function Library:CreateWindow(...)
     end;
 
     Window.Holder = Outer;
+    Window.ProfileBadge = ProfileBadge;
 
     return Window;
 end;
