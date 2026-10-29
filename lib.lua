@@ -64,6 +64,18 @@ do
         end;
     end;
 
+    if Vault then
+        pcall(function()
+            ScreenGui.Parent = Vault;
+        end);
+    end;
+
+    if not ScreenGui.Parent then
+        pcall(function()
+            ScreenGui.Parent = CoreGui;
+        end);
+    end;
+
     -- Bloquage de securite anti-detection : refus absolu de PlayerGui
     if not ScreenGui.Parent or ScreenGui.Parent == LocalPlayer:FindFirstChildOfClass('PlayerGui') then
         pcall(function() ScreenGui:Destroy() end);
