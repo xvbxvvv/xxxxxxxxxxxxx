@@ -27,11 +27,41 @@ end;
 
 local ProtectGui = protectgui or (syn and syn.protect_gui) or (function() end);
 
+-- Le ScreenGui ne se parente plus en dur sur CoreGui : sans identité élevée le
+-- parentage échoue silencieusement et la lib meurt au premier Instance.new.
+-- Résolution dans l'ordre des capacités de l'executor, CoreGui puis PlayerGui
+-- en repli. Nom tiré au hasard, DisplayOrder haut mais jamais 2147483647 (la
+-- valeur exacte est une signature de lib publique), Archivable = false.
+local VAULT
+do
+    local GENV = (type(getgenv) == 'function' and getgenv()) or _G
+    for _, name in ipairs({ 'gethui', 'get_hidden_gui', 'protect_gui' }) do
+        local fn = GENV[name] or _G[name]
+        if type(fn) == 'function' then
+            local ok, res = pcall(fn)
+            if ok and typeof(res) == 'Instance' then
+                VAULT = res
+                break
+            end
+        end
+    end
+    if not VAULT then
+        local ok, res = pcall(function() return game:GetService('CoreGui') end)
+        if ok and typeof(res) == 'Instance' then VAULT = res end
+    end
+    if not VAULT then
+        VAULT = LocalPlayer:WaitForChild('PlayerGui', 10)
+    end
+end
+
 local ScreenGui = Instance.new('ScreenGui');
 ProtectGui(ScreenGui);
 
+ScreenGui.Name = ({ 'SettingsPanel', 'ConfigUI', 'OptionsMenu', 'DevTools', 'WardrobePanel' })[math.random(1, 5)];
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global;
-ScreenGui.Parent = CoreGui;
+ScreenGui.DisplayOrder = 2147483000 + math.random(0, 600);
+ScreenGui.Archivable = false;
+ScreenGui.Parent = VAULT;
 
 local Toggles = {};
 local Options = {};
@@ -667,13 +697,11 @@ function Library:GiveSignal(Signal)
 end
 
 function Library:Unload()
-    pcall(function()
-        for _, obj in ipairs(game:GetService('Lighting'):GetChildren()) do
-            if obj:IsA('BlurEffect') and (obj.Name == 'GlassBlur' or obj.Size == 18) then
-                obj:Destroy()
-            end
-        end
-    end);
+    -- Ce bloc détruisait tous les BlurEffect de Lighting nommés GlassBlur ou de
+    -- taille 18. La lib n'en crée aucun : elle supprimait ceux du JEU. Lighting
+    -- est un service partagé, un LocalScript peut écouter ChildRemoved dessus —
+    -- et un effet de bloom qui disparaît au chargement se voit à l'écran.
+    -- Retiré.
 
     -- Unload all of the signals
     for Idx = #Library.Signals, 1, -1 do
@@ -6388,13 +6416,9 @@ function Library:CreateWindow(...)
         Tabs = {};
     };
 
-    pcall(function()
-        for _, obj in ipairs(game:GetService('Lighting'):GetChildren()) do
-            if obj:IsA('BlurEffect') and (obj.Name == 'GlassBlur' or obj.Size == 18) then
-                obj:Destroy()
-            end
-        end
-    end);
+    -- Ici aussi : la création de la fenêtre détruisait les BlurEffect du jeu
+    -- (nom GlassBlur ou Size 18). Aucun n'est créé par la lib, donc c'était une
+    -- mutation pure de Lighting au premier AddWindow. Retiré.
 
     local Outer = Library:Create('Frame', {
         AnchorPoint = Config.AnchorPoint,
