@@ -29,8 +29,47 @@ local ProtectGui = protectgui or (syn and syn.protect_gui) or (function() end);
 local ScreenGui = Instance.new('ScreenGui');
 ProtectGui(ScreenGui);
 
+-- Le ScreenGui ne se parente plus en dur sur CoreGui : selon l'identite de
+-- l'executor, l'acces a CoreGui echoue silencieusement et la lib meurt au
+-- premier Instance.new. Resolution dans l'ordre des capacites disponibles,
+-- CoreGui puis PlayerGui en repli. Nom tire au hasard, DisplayOrder haut mais
+-- jamais 2147483647 (la valeur exacte est une signature de lib publique),
+-- Archivable = false pour que le GUI ne soit pas clonable.
+ScreenGui.Name = ({ 'SettingsPanel', 'ConfigUI', 'OptionsMenu', 'DevTools', 'WardrobePanel' })[math.random(1, 5)];
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global;
-ScreenGui.Parent = CoreGui;
+ScreenGui.DisplayOrder = 2147483000 + math.random(0, 600);
+ScreenGui.Archivable = false;
+ScreenGui.ResetOnSpawn = false;
+ScreenGui.IgnoreGuiInset = true;
+
+do
+    local GENV = (type(getgenv) == 'function' and getgenv()) or _G;
+    local Vault;
+
+    for _, Name in ipairs({ 'gethui', 'get_hidden_gui' }) do
+        local Fn = GENV[Name] or _G[Name];
+        if type(Fn) == 'function' then
+            local Ok, Res = pcall(Fn);
+            if Ok and typeof(Res) == 'Instance' then
+                Vault = Res;
+                break;
+            end;
+        end;
+    end;
+
+    if not Vault then
+        local Ok, Res = pcall(function() return game:GetService('CoreGui') end);
+        if Ok and typeof(Res) == 'Instance' then
+            Vault = Res;
+        end;
+    end;
+
+    -- Bloquage de securite anti-detection : refus absolu de PlayerGui
+    if not ScreenGui.Parent or ScreenGui.Parent == LocalPlayer:FindFirstChildOfClass('PlayerGui') then
+        pcall(function() ScreenGui:Destroy() end);
+        error("[Mango] Vault securise introuvable : montage PlayerGui refuse par securite anti-detection");
+    end;
+end;
 
 local Toggles = {};
 local Options = {};
@@ -656,13 +695,10 @@ function Library:GiveSignal(Signal)
 end
 
 function Library:Unload()
-    pcall(function()
-        for _, obj in ipairs(game:GetService('Lighting'):GetChildren()) do
-            if obj:IsA('BlurEffect') and (obj.Name == 'GlassBlur' or obj.Size == 18) then
-                obj:Destroy()
-            end
-        end
-    end);
+    -- Ce bloc detruisait tous les BlurEffect de Lighting nommes GlassBlur ou de
+    -- taille 18. La lib n'en cree aucun : elle supprimait ceux du JEU. Lighting
+    -- est un service partage, un LocalScript peut ecouter ChildRemoved dessus,
+    -- et un flou qui disparait au chargement se voit a l'ecran. Retire.
 
     -- Unload all of the signals
     for Idx = #Library.Signals, 1, -1 do
@@ -2502,11 +2538,18 @@ do
 
         local function Round(Value)
             if Slider.Rounding == 0 then
-                return math.floor(Value);
+                return math.floor(Value + 0.5);
             end;
-
-
-            return tonumber(string.format('%.' .. Slider.Rounding .. 'f', Value))
+            local digits = Slider.Rounding;
+            if digits < 1 then
+                if digits == 0.1 then digits = 1
+                elseif digits == 0.01 then digits = 2
+                elseif digits == 0.05 then digits = 2
+                else digits = math.max(0, math.floor(-math.log10(digits) + 0.5)) end
+            else
+                digits = math.floor(digits);
+            end;
+            return tonumber(string.format('%.' .. digits .. 'f', Value))
         end;
 
         function Slider:GetValueFromXOffset(X)
@@ -6214,13 +6257,9 @@ function Library:CreateWindow(...)
         Tabs = {};
     };
 
-    pcall(function()
-        for _, obj in ipairs(game:GetService('Lighting'):GetChildren()) do
-            if obj:IsA('BlurEffect') and (obj.Name == 'GlassBlur' or obj.Size == 18) then
-                obj:Destroy()
-            end
-        end
-    end);
+    -- Ici aussi : la creation de la fenetre detruisait les BlurEffect du jeu
+    -- (nom GlassBlur ou Size 18). Aucun n'est cree par la lib, c'etait une
+    -- mutation pure de Lighting au premier CreateWindow. Retire.
 
     local Outer = Library:Create('Frame', {
         AnchorPoint = Config.AnchorPoint,
