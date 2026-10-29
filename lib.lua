@@ -2709,6 +2709,15 @@ do
             Parent = Container;
         });
 
+        local DropdownBtn = Library:Create('TextButton', {
+            BackgroundTransparency = 1;
+            Text = '';
+            Size = UDim2.new(1, 0, 1, 0);
+            ZIndex = 12;
+            Active = true;
+            Parent = DropdownOuter;
+        });
+
         Library:Create('UICorner', {
             CornerRadius = UDim.new(0, 5);
             Parent = DropdownOuter;
@@ -3003,44 +3012,47 @@ do
                     Library.RegistryMap[ButtonLabel].Properties.TextColor3 = Selected and 'AccentColor' or 'FontColor';
                 end;
 
-                ButtonLabel.InputBegan:Connect(function(Input)
-                    if IsClickInput(Input) then
-                        local Try = not Selected;
+                local function OnItemClick(Input)
+                    if not IsClickInput(Input) then return end;
+                    local Try = not Selected;
 
-                        if Dropdown:GetActiveValues() == 1 and (not Try) and (not Info.AllowNull) then
-                        else
-                            if Info.Multi then
-                                Selected = Try;
+                    if Dropdown:GetActiveValues() == 1 and (not Try) and (not Info.AllowNull) then
+                    else
+                        if Info.Multi then
+                            Selected = Try;
 
-                                if Selected then
-                                    Dropdown.Value[Value] = true;
-                                else
-                                    Dropdown.Value[Value] = nil;
-                                end;
+                            if Selected then
+                                Dropdown.Value[Value] = true;
                             else
-                                Selected = Try;
+                                Dropdown.Value[Value] = nil;
+                            end;
+                        else
+                            Selected = Try;
 
-                                if Selected then
-                                    Dropdown.Value = Value;
-                                else
-                                    Dropdown.Value = nil;
-                                end;
-
-                                for _, OtherButton in next, Buttons do
-                                    OtherButton:UpdateButton();
-                                end;
+                            if Selected then
+                                Dropdown.Value = Value;
+                            else
+                                Dropdown.Value = nil;
                             end;
 
-                            Table:UpdateButton();
-                            Dropdown:Display();
-
-                            Library:SafeCallback(Dropdown.Callback, Dropdown.Value);
-                            Library:SafeCallback(Dropdown.Changed, Dropdown.Value);
-
-                            Library:AttemptSave();
+                            for _, OtherButton in next, Buttons do
+                                OtherButton:UpdateButton();
+                            end;
+                            Dropdown:CloseDropdown();
                         end;
+
+                        Table:UpdateButton();
+                        Dropdown:Display();
+
+                        Library:SafeCallback(Dropdown.Callback, Dropdown.Value);
+                        Library:SafeCallback(Dropdown.Changed, Dropdown.Value);
+
+                        Library:AttemptSave();
                     end;
-                end);
+                end;
+
+                Button.InputBegan:Connect(OnItemClick);
+                ButtonLabel.InputBegan:Connect(OnItemClick);
 
                 Table:UpdateButton();
                 Dropdown:Display();
@@ -3064,7 +3076,10 @@ do
 
         Dropdown.Refresh = Dropdown.SetValues;
 
+        local lastOpenTime = 0;
+
         function Dropdown:OpenDropdown()
+            lastOpenTime = os.clock();
             local TargetH = GetTargetDropdownHeight();
             local OpensUpward = RecalculateListPosition(TargetH);
             RecalculateListSize(TargetH);
@@ -3091,6 +3106,7 @@ do
                 end;
             else
                 DropdownArrow.Rotation = 180;
+                ListOuter.Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, TargetH);
             end;
         end;
 
@@ -3148,27 +3164,54 @@ do
             if Library.UpdateESPPreviews then Library:UpdateESPPreviews(); end;
         end;
 
-        DropdownOuter.InputBegan:Connect(function(Input)
-            if not IsClickInput(Input) then return end;
-            if Library:MouseIsOverOpenedFrame(Input.Position.X, Input.Position.Y) then return end;
+        local function ToggleDropdown()
             if ListOuter.Visible then
                 Dropdown:CloseDropdown();
             else
                 Dropdown:OpenDropdown();
             end;
+        end;
+
+        if DropdownBtn then
+            DropdownBtn.Activated:Connect(ToggleDropdown);
+        end;
+
+        DropdownOuter.InputBegan:Connect(function(Input)
+            if not IsClickInput(Input) then return end;
+            ToggleDropdown();
+        end);
+
+        DropdownInner.InputBegan:Connect(function(Input)
+            if not IsClickInput(Input) then return end;
+            ToggleDropdown();
+        end);
+
+        ItemList.InputBegan:Connect(function(Input)
+            if not IsClickInput(Input) then return end;
+            ToggleDropdown();
         end);
 
         Library:GiveSignal(InputService.InputBegan:Connect(function(Input)
+            if not ListOuter.Visible then return end;
             if not IsMouseInput(Input) then return end;
+            if (os.clock() - lastOpenTime) < 0.15 then return end;
+
             local PX = Input.Position.X;
             local PY = Input.Position.Y;
+
             local AbsPos, AbsSize = ListOuter.AbsolutePosition, ListOuter.AbsoluteSize;
-
-            if PX < AbsPos.X or PX > AbsPos.X + AbsSize.X
-                or PY < (AbsPos.Y - 20 - 1) or PY > AbsPos.Y + AbsSize.Y then
-
-                Dropdown:CloseDropdown();
+            if PX >= AbsPos.X and PX <= (AbsPos.X + AbsSize.X)
+                and PY >= AbsPos.Y and PY <= (AbsPos.Y + AbsSize.Y) then
+                return;
             end;
+
+            local DropPos, DropSize = DropdownOuter.AbsolutePosition, DropdownOuter.AbsoluteSize;
+            if PX >= DropPos.X and PX <= (DropPos.X + DropSize.X)
+                and PY >= DropPos.Y and PY <= (DropPos.Y + DropSize.Y) then
+                return;
+            end;
+
+            Dropdown:CloseDropdown();
         end));
 
         Dropdown:BuildDropdownList();
