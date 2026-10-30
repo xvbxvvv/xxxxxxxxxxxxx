@@ -7632,26 +7632,83 @@ function Library:CreateWindow(...)
     --  Bouton flottant d'ouverture (mobile / tactile : pas de clavier)
     --============================================================
     local OpenButton = Library:Create('TextButton', {
-        BackgroundColor3 = Library.AccentColor;
-        BorderColor3 = Library.AccentColorDark;
-        BorderMode = Enum.BorderMode.Inset;
+        BackgroundColor3 = Color3.fromRGB(18, 18, 18);
+        BackgroundTransparency = 0.25;
+        BorderSizePixel = 0;
         AnchorPoint = Vector2.new(1, 0.5);
         Position = UDim2.new(1, -20, 0.5, 0);
         Size = UDim2.new(0, 46, 0, 46);
-        Text = 'GS';
-        TextColor3 = Color3.new(1, 1, 1);
-        TextSize = 16;
-        Font = Library.Font;
+        Text = '';
         AutoButtonColor = false;
         ZIndex = 50;
-        Visible = IsTouch;
+        Visible = true;
         Parent = ScreenGui;
     });
 
+    Library:Create('UICorner', {
+        CornerRadius = UDim.new(0, 10);
+        Parent = OpenButton;
+    });
+
+    Library:Create('UIStroke', {
+        Color = Library.OutlineColor;
+        Thickness = 1;
+        Transparency = 0.35;
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+        Parent = OpenButton;
+    });
+
+    -- Le bouton flottant porte le logo de l'interface, pas un texte.
+    -- Il suit WindowLogo : si le menu change de logo, le bouton suit.
+    local OpenIcon = Library:Create('ImageLabel', {
+        BackgroundTransparency = 1;
+        BorderSizePixel = 0;
+        AnchorPoint = Vector2.new(0.5, 0.5);
+        Position = UDim2.fromScale(0.5, 0.5);
+        Size = UDim2.new(1, -14, 1, -14);
+        Image = (WindowLogo.Image ~= '' and WindowLogo.Image) or Library.DefaultLogoUrl;
+        ImageColor3 = Color3.new(1, 1, 1);
+        ScaleType = Enum.ScaleType.Fit;
+        ZIndex = 51;
+        Parent = OpenButton;
+    });
+
+    WindowLogo:GetPropertyChangedSignal('Image'):Connect(function()
+        OpenIcon.Image = (WindowLogo.Image ~= '' and WindowLogo.Image) or Library.DefaultLogoUrl;
+    end);
+
     Library:AddToRegistry(OpenButton, {
-        BackgroundColor3 = 'AccentColor';
+        BackgroundColor3 = 'MainColor';
         BorderColor3 = 'AccentColorDark';
     });
+
+    -- Le client applique une echelle GUI superieure a 1 : un UDim2.new(1, ...)
+    -- tombe hors ecran. On accroche donc le bouton au bord droit du menu, qui
+    -- est toujours dans le champ visible.
+    local function VisibleRightEdge()
+        return Outer.AbsolutePosition.X + Outer.AbsoluteSize.X + 12;
+    end;
+
+    -- Le menu n'a pas encore sa taille finale au moment du Create :
+    -- on attend que Outer soit mesure avant de coller le bouton a son bord.
+    -- AbsolutePosition est en espace ecran, Position en espace ScreenGui :
+    -- il faut retrancher l'origine du ScreenGui (IgnoreGuiInset = true).
+    task.defer(function()
+        local deadline = os.clock() + 5;
+        while os.clock() < deadline do
+            if not OpenButton.Parent then return end;
+            if Outer.AbsoluteSize.X > 0 then break end;
+            task.wait(0.05);
+        end;
+
+        if not OpenButton.Parent then return end;
+        local SG = ScreenGui.AbsolutePosition;
+        OpenButton.AnchorPoint = Vector2.zero;
+        OpenButton.Position = UDim2.fromOffset(
+            VisibleRightEdge() - SG.X,
+            (Outer.AbsolutePosition.Y + 40) - SG.Y
+        );
+    end);
 
     -- déplaçable + tap pour ouvrir/fermer (tactile et souris)
     Library:GiveSignal(OpenButton.InputBegan:Connect(function(Input)
@@ -7660,8 +7717,9 @@ function Library:CreateWindow(...)
             return;
         end;
 
+        local SG = ScreenGui.AbsolutePosition;
         local startPos = Vector2.new(Input.Position.X, Input.Position.Y);
-        local startAbs = OpenButton.AbsolutePosition;
+        local startAbs = OpenButton.AbsolutePosition - SG;
         local moved = false;
         local dragging = true;
         local activeInput = Input;
@@ -7693,10 +7751,16 @@ function Library:CreateWindow(...)
                 local VP = GetViewport();
                 local W, H = OpenButton.AbsoluteSize.X, OpenButton.AbsoluteSize.Y;
 
+                -- Le client rend la GUI plus large que la fenetre reelle :
+                -- GetViewport() annonce 1536 alors que le bord visible est
+                -- proche de Outer.right + 100. On borne la dedans.
+                local MaxX = math.min(VP.X - 6, Outer.AbsolutePosition.X + Outer.AbsoluteSize.X + 88) - W;
+                local MaxY = VP.Y - H - 6;
+
                 OpenButton.AnchorPoint = Vector2.zero;
                 OpenButton.Position = UDim2.fromOffset(
-                    math.clamp(startAbs.X + dx, 6, math.max(6, VP.X - W - 6)),
-                    math.clamp(startAbs.Y + dy, 6, math.max(6, VP.Y - H - 6))
+                    math.clamp(startAbs.X + dx, 6 - SG.X, math.max(6 - SG.X, MaxX - SG.X)),
+                    math.clamp(startAbs.Y + dy, 6 - SG.Y, math.max(6 - SG.Y, MaxY - SG.Y))
                 );
             end;
         end);
