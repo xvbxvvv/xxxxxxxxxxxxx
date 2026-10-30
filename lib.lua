@@ -7658,6 +7658,40 @@ function Library:CreateWindow(...)
         Parent = OpenButton;
     });
 
+    -- Ombre portee neutre (deux couches, pas d'accent) : les enfants restent
+    -- solidaires du bouton quand on le deplace, et ZIndex les passe derriere.
+    local ShadowFar = Library:Create('Frame', {
+        BackgroundColor3 = Color3.new(0, 0, 0);
+        BackgroundTransparency = 0.74;
+        BorderSizePixel = 0;
+        AnchorPoint = Vector2.new(0.5, 0.5);
+        Position = UDim2.new(0.5, 0, 0.5, 3);
+        Size = UDim2.new(1, 6, 1, 6);
+        ZIndex = 48;
+        Parent = OpenButton;
+    });
+
+    local ShadowNear = Library:Create('Frame', {
+        BackgroundColor3 = Color3.new(0, 0, 0);
+        BackgroundTransparency = 0.52;
+        BorderSizePixel = 0;
+        AnchorPoint = Vector2.new(0.5, 0.5);
+        Position = UDim2.new(0.5, 0, 0.5, 2);
+        Size = UDim2.new(1, 2, 1, 2);
+        ZIndex = 49;
+        Parent = OpenButton;
+    });
+
+    Library:Create('UICorner', {
+        CornerRadius = UDim.new(0, 14);
+        Parent = ShadowFar;
+    });
+
+    Library:Create('UICorner', {
+        CornerRadius = UDim.new(0, 11);
+        Parent = ShadowNear;
+    });
+
     -- Le bouton flottant porte le logo de l'interface, pas un texte.
     -- Il suit WindowLogo : si le menu change de logo, le bouton suit.
     local OpenIcon = Library:Create('ImageLabel', {
@@ -7710,6 +7744,32 @@ function Library:CreateWindow(...)
         );
     end);
 
+    -- Un tap ouvre/ferme le menu. Le drag ne doit pas compter comme un tap :
+    -- TapGuard.moved est leve des que le pointeur bouge de plus de 6 px.
+    -- Le debounce de 0.25 s absorbe les evenements en double (PC + mobile).
+    local TapGuard = { moved = false; last = 0 };
+
+    local function OpenButtonTap()
+        if TapGuard.moved then
+            TapGuard.moved = false;
+            return;
+        end;
+
+        local now = os.clock();
+        if (now - TapGuard.last) < 0.25 then
+            return;
+        end;
+        TapGuard.last = now;
+
+        Library:Toggle();
+    end;
+
+    -- Trois chemins d'entree selon la plateforme : clic souris, tap tactile,
+    -- et Activated (manette / accessibilite). Le debounce fusionne les doublons.
+    Library:GiveSignal(OpenButton.MouseButton1Click:Connect(OpenButtonTap));
+    Library:GiveSignal(OpenButton.TouchTap:Connect(OpenButtonTap));
+    Library:GiveSignal(OpenButton.Activated:Connect(OpenButtonTap));
+
     -- déplaçable + tap pour ouvrir/fermer (tactile et souris)
     Library:GiveSignal(OpenButton.InputBegan:Connect(function(Input)
         if Input.UserInputType ~= Enum.UserInputType.MouseButton1
@@ -7717,6 +7777,7 @@ function Library:CreateWindow(...)
             return;
         end;
 
+        TapGuard.moved = false;
         local SG = ScreenGui.AbsolutePosition;
         local startPos = Vector2.new(Input.Position.X, Input.Position.Y);
         local startAbs = OpenButton.AbsolutePosition - SG;
@@ -7746,6 +7807,7 @@ function Library:CreateWindow(...)
 
                 if (math.abs(dx) > 6) or (math.abs(dy) > 6) then
                     moved = true;
+                    TapGuard.moved = true;
                 end;
 
                 local VP = GetViewport();
@@ -7770,9 +7832,6 @@ function Library:CreateWindow(...)
                 or (activeInput.UserInputType == Enum.UserInputType.MouseButton1 and endInput.UserInputType == Enum.UserInputType.MouseButton1)
                 or (activeInput.UserInputType == Enum.UserInputType.Touch and endInput.UserInputType == Enum.UserInputType.Touch) then
                 Disconnect();
-                if not moved then
-                    Library:Toggle();
-                end;
             end;
         end);
 
