@@ -5402,7 +5402,8 @@ function Library:SetWatermarkVisibility(Bool)
     Library.Watermark.Visible = Bool;
 end;
 
-Library.DefaultLogoUrl = 'https://github.com/xvbxvvv/logo/blob/main/0fb782bd-42a8-46bd-8a52-7df5bee0812a.jpg?raw=true';
+-- Logo de l'interface : asset Roblox local, pas le jpg distant mangue.
+Library.DefaultLogoUrl = 'rbxassetid://7734053495';
 
 function Library:GetCustomAsset(url, filename)
     if not url or url == '' then return '' end
@@ -6555,9 +6556,8 @@ function Library:CreateWindow(...)
 
     Window:SetWindowTitle(Config.Title or 'gamesense');
 
-    if Config.Logo ~= false then
-        Window:SetLogo(type(Config.Logo) == 'string' and Config.Logo or Library.DefaultLogoUrl);
-    end;
+    -- Le logo de la barre de titre revient sur l'asset Roblox local.
+    Window:SetLogo(Library.DefaultLogoUrl);
 
     Library:MakeDraggable(Outer, Outer, 35);
     Library:MakeDraggable(Outer, BorderLayer, 35);
@@ -7692,14 +7692,14 @@ function Library:CreateWindow(...)
         Parent = ShadowNear;
     });
 
-    -- Le bouton flottant porte le logo de l'interface, pas un texte.
+    -- Le bouton flottant reprend le logo de l'interface (asset Roblox local).
     -- Il suit WindowLogo : si le menu change de logo, le bouton suit.
     local OpenIcon = Library:Create('ImageLabel', {
         BackgroundTransparency = 1;
         BorderSizePixel = 0;
         AnchorPoint = Vector2.new(0.5, 0.5);
         Position = UDim2.fromScale(0.5, 0.5);
-        Size = UDim2.new(1, -14, 1, -14);
+        Size = UDim2.new(1, -12, 1, -12);
         Image = (WindowLogo.Image ~= '' and WindowLogo.Image) or Library.DefaultLogoUrl;
         ImageColor3 = Color3.new(1, 1, 1);
         ScaleType = Enum.ScaleType.Fit;
@@ -7708,6 +7708,7 @@ function Library:CreateWindow(...)
     });
 
     WindowLogo:GetPropertyChangedSignal('Image'):Connect(function()
+        if type(WindowLogo.Image) ~= 'string' then return end;
         OpenIcon.Image = (WindowLogo.Image ~= '' and WindowLogo.Image) or Library.DefaultLogoUrl;
     end);
 
