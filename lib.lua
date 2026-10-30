@@ -2791,6 +2791,7 @@ do
         end
 
         local MAX_DROPDOWN_ITEMS = 8;
+        local LIST_MARGIN = 6;
 
         local ListOuter = Library:Create('Frame', {
             BackgroundColor3 = Color3.new(0, 0, 0);
@@ -2818,41 +2819,82 @@ do
             return math.clamp(count * DROPDOWN_ITEM_H, 0, MAX_DROPDOWN_ITEMS * DROPDOWN_ITEM_H) + 2;
         end;
 
-        local function RecalculateListPosition(forcedH)
-            local X = DropdownOuter.AbsolutePosition.X;
+        local function GetViewport()
             local Cam = workspace.CurrentCamera;
-            local VP = (Cam and Cam.ViewportSize.X > 0) and Cam.ViewportSize or ScreenGui.AbsoluteSize;
-            local TargetH = forcedH or GetTargetDropdownHeight();
-
-            local Y = DropdownOuter.AbsolutePosition.Y + DropdownOuter.AbsoluteSize.Y + 2;
-            local OpensUpward = false;
-
-            -- Si la liste dépasse en bas de l'écran (notamment en mode fenêtré), on l'ouvre vers le haut
-            if (Y + TargetH) > (VP.Y - 8) then
-                local UpY = DropdownOuter.AbsolutePosition.Y - TargetH - 2;
-                if UpY >= 4 or (DropdownOuter.AbsolutePosition.Y > (VP.Y / 2)) then
-                    Y = math.max(4, UpY);
-                    OpensUpward = true;
-                end;
-            end;
-
-            ListOuter.Position = UDim2.fromOffset(
-                math.clamp(X, 4, math.max(4, VP.X - DropdownOuter.AbsoluteSize.X - 4)),
-                math.clamp(Y, 4, math.max(4, VP.Y - TargetH - 4))
-            );
-
-            return OpensUpward, TargetH;
+            return (Cam and Cam.ViewportSize.X > 0) and Cam.ViewportSize or ScreenGui.AbsoluteSize;
         end;
 
-        local function RecalculateListSize(YSize)
-            local H = YSize or GetTargetDropdownHeight();
-            ListOuter.Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, H);
+        -- La liste s'ouvre vers le bas par defaut. Elle ne bascule au-dessus du
+        -- champ que si le dessous ne peut pas montrer une seule ligne ET que le
+        -- dessus en montre davantage. Sinon elle reste en bas et raccourcit :
+        -- le ScrollingFrame interieur prend le relais pour le reste.
+        local function ComputeListLayout(forcedH)
+            local H = (type(forcedH) == 'number' and forcedH) or GetTargetDropdownHeight();
+            local VP = GetViewport();
+
+            local OutX, OutY = DropdownOuter.AbsolutePosition.X, DropdownOuter.AbsolutePosition.Y;
+            local OutW, OutH = DropdownOuter.AbsoluteSize.X, DropdownOuter.AbsoluteSize.Y;
+
+            local SpaceBelow = (VP.Y - LIST_MARGIN) - (OutY + OutH + 2);
+            local SpaceAbove = (OutY - 2) - LIST_MARGIN;
+            local MinH = math.min(H, DROPDOWN_ITEM_H + 2);
+
+            local OpensUpward = (SpaceBelow < MinH) and (SpaceAbove > SpaceBelow);
+            local ListH = OpensUpward and SpaceAbove or SpaceBelow;
+
+            ListH = math.clamp(math.min(H, ListH), MinH, H);
+
+            local X = math.clamp(OutX, LIST_MARGIN, math.max(LIST_MARGIN, VP.X - OutW - LIST_MARGIN));
+            local Y = OpensUpward and (OutY - 2 - ListH) or (OutY + OutH + 2);
+            Y = math.clamp(Y, LIST_MARGIN, math.max(LIST_MARGIN, VP.Y - ListH - LIST_MARGIN));
+
+            return OpensUpward, ListH, X, Y;
+        end;
+
+        -- Le ScreenGui est en IgnoreGuiInset : son origine est 58 px au-dessus
+        -- de l'ecran. Position est donc decalee par rapport a AbsolutePosition,
+        -- et la liste, enfant direct du ScreenGui, doit etre placee en local.
+        local function SetListPosition(X, Y)
+            local SG = ScreenGui.AbsolutePosition;
+            ListOuter.Position = UDim2.fromOffset(X - SG.X, Y - SG.Y);
+        end;
+
+        local function RecalculateListPosition(forcedH)
+            local OpensUpward, ListH, X, Y = ComputeListLayout(forcedH);
+            SetListPosition(X, Y);
+            return OpensUpward, ListH;
+        end;
+
+        local function RecalculateListSize(forcedH)
+            local _, ListH = ComputeListLayout(forcedH);
+            ListOuter.Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, ListH);
+            return ListH;
         end;
 
         RecalculateListPosition();
         RecalculateListSize();
 
-        DropdownOuter:GetPropertyChangedSignal('AbsolutePosition'):Connect(RecalculateListPosition);
+        -- Le signal transmet le nom de la propriete en premier argument : sans
+        -- ce filtre, forcedH arrivait en string et l'addition plantait, laissant
+        -- la liste figee a sa position de creation.
+        DropdownOuter:GetPropertyChangedSignal('AbsolutePosition'):Connect(function()
+            RecalculateListPosition();
+            if ListOuter.Visible and Library.OpenedFrames[ListOuter] then
+                RecalculateListSize();
+            end;
+        end);
+
+        do
+            local Cam = workspace.CurrentCamera;
+            if Cam then
+                Library:GiveSignal(Cam:GetPropertyChangedSignal('ViewportSize'):Connect(function()
+                    if ListOuter.Visible and Library.OpenedFrames[ListOuter] then
+                        RecalculateListPosition();
+                        RecalculateListSize();
+                    end;
+                end));
+            end;
+        end;
 
         local ListInner = Library:Create('Frame', {
             BackgroundColor3 = Library.MainColor;
@@ -2956,11 +2998,17 @@ do
 
                 Count = Count + 1;
 
-                local Button = Library:Create('Frame', {
+                -- TextButton et pas Frame : sur tactile, un Frame dans un
+                -- ScrollingFrame ne recoit pas InputBegan de facon fiable, le
+                -- tap part dans la gestion de scroll. Un bouton recoit toujours
+                -- MouseButton1Click (souris et tap).
+                local Button = Library:Create('TextButton', {
                     BackgroundColor3 = Library.MainColor;
                     BorderColor3 = Library.OutlineColor;
                     BorderMode = Enum.BorderMode.Middle;
                     Size = UDim2.new(1, -1, 0, DROPDOWN_ITEM_H);
+                    Text = '';
+                    AutoButtonColor = false;
                     ZIndex = 23;
                     Active = true;
                     Parent = Scrolling;
@@ -3012,8 +3060,14 @@ do
                     Library.RegistryMap[ButtonLabel].Properties.TextColor3 = Selected and 'AccentColor' or 'FontColor';
                 end;
 
+                local lastItemClick = 0;
                 local function OnItemClick(Input)
-                    if not IsClickInput(Input) then return end;
+                    if Input ~= nil and not IsClickInput(Input) then return end;
+                    -- MouseButton1Click et InputBegan peuvent tomber sur le meme
+                    -- tap : on ne garde que le premier.
+                    local now = os.clock();
+                    if now - lastItemClick < 0.25 then return end;
+                    lastItemClick = now;
                     local Try = not Selected;
 
                     if Dropdown:GetActiveValues() == 1 and (not Try) and (not Info.AllowNull) then
@@ -3051,8 +3105,10 @@ do
                     end;
                 end;
 
+                Button.MouseButton1Click:Connect(function()
+                    OnItemClick(nil);
+                end);
                 Button.InputBegan:Connect(OnItemClick);
-                ButtonLabel.InputBegan:Connect(OnItemClick);
 
                 Table:UpdateButton();
                 Dropdown:Display();
@@ -3081,8 +3137,12 @@ do
         function Dropdown:OpenDropdown()
             lastOpenTime = os.clock();
             local TargetH = GetTargetDropdownHeight();
-            local OpensUpward = RecalculateListPosition(TargetH);
-            RecalculateListSize(TargetH);
+            local OpensUpward, ListH, X, Y = ComputeListLayout(TargetH);
+            Dropdown.lastLayout = {
+                x = X, y = Y, h = ListH, up = OpensUpward,
+                fx = DropdownOuter.AbsolutePosition.X, fy = DropdownOuter.AbsolutePosition.Y,
+                fh = DropdownOuter.AbsoluteSize.Y,
+            };
 
             ListOuter.Visible = true;
             Library.OpenedFrames[ListOuter] = true;
@@ -3093,20 +3153,22 @@ do
 
                 ListOuter.Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, 0);
                 if OpensUpward then
-                    local bottomY = DropdownOuter.AbsolutePosition.Y - 2;
-                    ListOuter.Position = UDim2.fromOffset(DropdownOuter.AbsolutePosition.X, bottomY);
+                    -- la liste part du bas du champ et grandit vers le haut
+                    SetListPosition(X, Y + ListH);
                     Tween(ListOuter, TweenConfig.Dropdown, {
-                        Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, TargetH),
-                        Position = UDim2.fromOffset(DropdownOuter.AbsolutePosition.X, bottomY - TargetH)
+                        Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, ListH),
+                        Position = UDim2.fromOffset(X - ScreenGui.AbsolutePosition.X, Y - ScreenGui.AbsolutePosition.Y)
                     }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
                 else
+                    SetListPosition(X, Y);
                     Tween(ListOuter, TweenConfig.Dropdown, {
-                        Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, TargetH)
+                        Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, ListH)
                     }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
                 end;
             else
                 DropdownArrow.Rotation = 180;
-                ListOuter.Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, TargetH);
+                SetListPosition(X, Y);
+                ListOuter.Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X, ListH);
             end;
         end;
 
@@ -3164,7 +3226,14 @@ do
             if Library.UpdateESPPreviews then Library:UpdateESPPreviews(); end;
         end;
 
+        local lastToggle = 0;
         local function ToggleDropdown()
+            -- Souris : InputBegan puis Activated. Tactile : le tap peut livrer
+            -- MouseButton1Click et InputBegan. Un seul doit compter.
+            local now = os.clock();
+            if now - lastToggle < 0.25 then return end;
+            lastToggle = now;
+
             if ListOuter.Visible then
                 Dropdown:CloseDropdown();
             else
@@ -3172,29 +3241,24 @@ do
             end;
         end;
 
+        local function OnDropdownInput(Input)
+            if not IsClickInput(Input) then return end;
+            ToggleDropdown();
+        end;
+
         if DropdownBtn then
+            DropdownBtn.MouseButton1Click:Connect(ToggleDropdown);
             DropdownBtn.Activated:Connect(ToggleDropdown);
         end;
 
-        DropdownOuter.InputBegan:Connect(function(Input)
-            if not IsClickInput(Input) then return end;
-            ToggleDropdown();
-        end);
-
-        DropdownInner.InputBegan:Connect(function(Input)
-            if not IsClickInput(Input) then return end;
-            ToggleDropdown();
-        end);
-
-        ItemList.InputBegan:Connect(function(Input)
-            if not IsClickInput(Input) then return end;
-            ToggleDropdown();
-        end);
+        DropdownOuter.InputBegan:Connect(OnDropdownInput);
+        DropdownInner.InputBegan:Connect(OnDropdownInput);
+        ItemList.InputBegan:Connect(OnDropdownInput);
 
         Library:GiveSignal(InputService.InputBegan:Connect(function(Input)
             if not ListOuter.Visible then return end;
-            if not IsMouseInput(Input) then return end;
-            if (os.clock() - lastOpenTime) < 0.15 then return end;
+            if not IsClickInput(Input) then return end;
+            if (os.clock() - lastOpenTime) < 0.25 then return end;
 
             local PX = Input.Position.X;
             local PY = Input.Position.Y;
