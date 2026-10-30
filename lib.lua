@@ -5402,8 +5402,8 @@ function Library:SetWatermarkVisibility(Bool)
     Library.Watermark.Visible = Bool;
 end;
 
--- Logo de l'interface : asset Roblox local, pas le jpg distant mangue.
-Library.DefaultLogoUrl = 'rbxassetid://7734053495';
+-- Logo de l'interface : le raw GitHub de daddy, pour la barre de titre ET le bouton.
+Library.DefaultLogoUrl = 'https://github.com/xvbxvvv/logo/blob/main/0fb782bd-42a8-46bd-8a52-7df5bee0812a.jpg?raw=true';
 
 function Library:GetCustomAsset(url, filename)
     if not url or url == '' then return '' end
@@ -6556,7 +6556,7 @@ function Library:CreateWindow(...)
 
     Window:SetWindowTitle(Config.Title or 'gamesense');
 
-    -- Le logo de la barre de titre revient sur l'asset Roblox local.
+    -- Le logo de la barre de titre : le raw GitHub de daddy.
     Window:SetLogo(Library.DefaultLogoUrl);
 
     Library:MakeDraggable(Outer, Outer, 35);
